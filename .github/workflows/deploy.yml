@@ -8,7 +8,7 @@ permissions:
 
 on:
   push:
-    branches: ['main']
+    branches: ['main', 'tests']
 env:
   NPM_AUTH_TOKEN: ${{ secrets.READER_TOKEN }}
 
@@ -25,7 +25,10 @@ jobs:
       - run: bun run tsc
       - run: bun run lint
       - run: bun run build-cli
-      # - run: bun test
+      - run: |
+          ./tsm-cli/bin/tsm config --team=teamsykmelding
+          ./tsm-cli/bin/tsm config --team=tsm
+          bun test
       - run: bun run copy-html
       - run: bun run sanity-check
       - uses: actions/setup-node@v4
