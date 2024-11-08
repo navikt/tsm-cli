@@ -55,6 +55,11 @@ const availableApps = {
         demo: 'https://syk-dig.ekstern.dev.nav.no/',
         prod: 'https://syk-dig.intern.nav.no/',
     } satisfies Envs,
+    'syk-inn': {
+        dev: 'https://www.ekstern.dev.nav.no/samarbeidspartner/sykmelding',
+        demo: 'https://syk-inn.ekstern.dev.nav.no/samarbeidspartner/sykmelding',
+        prod: 'https://nav.no/samarbeidspartner/sykmelding/',
+    } satisfies Envs,
     'sykmelder-statistikk': {
         dev: 'https://www.ekstern.dev.nav.no/samarbeidspartner/sykmelder-statistikk',
         demo: 'https://sykmelder-statistikk.ekstern.dev.nav.no/samarbeidspartner/sykmelder-statistikk',
@@ -72,9 +77,7 @@ const availableApps = {
     } satisfies Envs,
 }
 
-type AppKeys = (typeof appKeys)[number]
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
-const appKeys = R.keys(availableApps)
+type AppKeys = keyof typeof availableApps
 
 export async function openResource(what: string | null, env: string | null): Promise<void> {
     if (what != null && isPage(what)) {
