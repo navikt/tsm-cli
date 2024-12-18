@@ -2,6 +2,7 @@ import chalk from 'chalk'
 import * as R from 'remeda'
 import { $ } from 'bun'
 import { PushResult } from 'simple-git'
+import { checkbox, confirm, input } from '@inquirer/prompts'
 
 import { getAllRepos } from '../../common/repos.ts'
 import { getTeam } from '../../common/config.ts'
@@ -9,7 +10,6 @@ import { Gitter } from '../../common/git.ts'
 import { BaseRepoNode } from '../../common/octokit.ts'
 import { log } from '../../common/log.ts'
 import { GIT_CACHE_DIR } from '../../common/cache.ts'
-import inquirer from '../../common/inquirer.ts'
 
 export async function syncCmd(query: string | undefined, cmd: string | undefined, force: boolean): Promise<void> {
     if (query == null) {
@@ -71,9 +71,7 @@ async function updateGitterCache(repos: BaseRepoNode<unknown>[]): Promise<void> 
 }
 
 async function getTargetRepos<Repo extends { name: string }>(otherRepos: Repo[]): Promise<Repo[]> {
-    const checkboxResponse = await inquirer.prompt<{ target: string[] }>({
-        type: 'checkbox',
-        name: 'target',
+    const checkboxResponse = await checkbox({
         message: 'Select repos to run commands in',
         choices: [
             { value: 'all', name: 'All repos' },
@@ -84,10 +82,10 @@ async function getTargetRepos<Repo extends { name: string }>(otherRepos: Repo[])
         ],
     })
 
-    if (checkboxResponse.target.includes('all')) {
+    if (checkboxResponse.includes('all')) {
         return otherRepos
-    } else if (checkboxResponse.target.length !== 0) {
-        return otherRepos.filter((it) => checkboxResponse.target.includes(it.name))
+    } else if (checkboxResponse.length !== 0) {
+        return otherRepos.filter((it) => checkboxResponse.includes(it.name))
     } else {
         log(chalk.red('You must select at least one repo'))
         return getTargetRepos(otherRepos)
@@ -156,14 +154,12 @@ async function runCommand(
     }
 
     const confirmResult = force
-        ? { confirm: true }
-        : await inquirer.prompt({
-              name: 'confirm',
-              type: 'confirm',
+        ? true
+        : await confirm({
               message: `Do you want to stage these changes?`,
           })
 
-    if (confirmResult.confirm) {
+    if (confirmResult) {
         if (otherRepos.length === 0) {
             return [[repo.name, 'staged']]
         } else {
@@ -179,17 +175,13 @@ async function runCommand(
 }
 
 async function finalCheckAndCommitPush(stagedRepos: BaseRepoNode<unknown>[]): Promise<void> {
-    const confirmResult = await inquirer.prompt({
-        name: 'confirm',
-        type: 'confirm',
+    const confirmResult = await confirm({
         message: `Do you want to commit and push these changes?`,
     })
 
-    if (confirmResult.confirm) {
+    if (confirmResult) {
         const gitter = new Gitter('cache')
-        const commitMessage = await inquirer.prompt<{ message: string }>({
-            type: 'input',
-            name: 'message',
+        const commitMessage = await input({
             message: `Enter commit message:`,
         })
 
@@ -199,7 +191,7 @@ async function finalCheckAndCommitPush(stagedRepos: BaseRepoNode<unknown>[]): Pr
                 const pushResult: PushResult = await gitter
                     .createRepoGitClient(it.name)
                     .add('.')
-                    .commit(commitMessage.message)
+                    .commit(commitMessage)
                     .push()
 
                 log(`${chalk.green(`Pushed to repo ${pushResult.repo}`)} - ${it.url}`)

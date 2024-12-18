@@ -2,7 +2,6 @@ import * as R from 'remeda'
 import chalk from 'chalk'
 import { search } from '@inquirer/prompts'
 
-import { hackilyFixBackToBackPrompt } from '../common/inquirer.ts'
 import { log } from '../common/log.ts'
 import { openUrl } from '../common/open-url.ts'
 
@@ -127,7 +126,6 @@ async function openAppOrPage(appOrPage: string): Promise<void> {
         return
     }
 
-    await hackilyFixBackToBackPrompt()
     const selectedEnv = await getAppEnv(cleanItem)
 
     await openApp(cleanItem, selectedEnv)
