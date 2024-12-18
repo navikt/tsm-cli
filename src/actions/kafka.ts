@@ -4,7 +4,6 @@ import fs from 'fs-extra'
 
 import { CACHE_DIR } from '../common/cache.ts'
 import { log } from '../common/log.ts'
-import inquirer from '../common/inquirer.ts'
 import { getAllAppNames, promptForAppName } from '../common/kubectl.ts'
 
 function saveSecretToPath(secretData: any, path: string): void {

@@ -3,12 +3,11 @@ import path from 'node:path'
 import * as R from 'remeda'
 import chalk from 'chalk'
 import { PushResult } from 'simple-git'
-import { search } from '@inquirer/prompts'
+import { search, input, checkbox, confirm } from '@inquirer/prompts'
 
 import { BaseRepoNode } from '../common/octokit.ts'
 import { log } from '../common/log.ts'
 import { Gitter } from '../common/git.ts'
-import inquirer, { hackilyFixBackToBackPrompt } from '../common/inquirer.ts'
 import { GIT_CACHE_DIR } from '../common/cache.ts'
 import { getTeam } from '../common/config.ts'
 import { getAllRepos } from '../common/repos.ts'
@@ -36,9 +35,7 @@ function queryRepo(query: string, repo: string): boolean {
 }
 
 async function getTargetRepos<Repo extends { name: string }>(otherRepos: Repo[]): Promise<Repo[]> {
-    const checkboxResponse = await inquirer.prompt<{ target: string[] }>({
-        type: 'checkbox',
-        name: 'target',
+    const checkboxResponse = await checkbox({
         message: 'Select repos to copy file to',
         choices: [
             { value: 'all', name: 'All repos' },
@@ -49,10 +46,10 @@ async function getTargetRepos<Repo extends { name: string }>(otherRepos: Repo[])
         ],
     })
 
-    if (checkboxResponse.target.includes('all')) {
+    if (checkboxResponse.includes('all')) {
         return otherRepos
-    } else if (checkboxResponse.target.length !== 0) {
-        return otherRepos.filter((it) => checkboxResponse.target.includes(it.name))
+    } else if (checkboxResponse.length !== 0) {
+        return otherRepos.filter((it) => checkboxResponse.includes(it.name))
     } else {
         log(chalk.red('You must select at least one repo'))
         return getTargetRepos(otherRepos)
@@ -89,58 +86,48 @@ export async function syncFileAcrossRepos(query: string): Promise<void> {
     })
 
     // Step 2, selecting a valid file in the source repo
-    await hackilyFixBackToBackPrompt()
     const fileToSync = await getValidFileInSource(sourceRepo)
 
     // Step 3, selecting target repos
-    await hackilyFixBackToBackPrompt()
     const otherRepos = relevantRepos.filter((it) => it.name !== sourceRepo)
     const targetRepos = await getTargetRepos(otherRepos)
 
     // Step 4, writing commit message
-    await hackilyFixBackToBackPrompt()
-    const commitMessage = await inquirer.prompt<{ message: string }>({
-        type: 'input',
-        name: 'message',
+    const commitMessage = await input({
         message: 'Commit message for sync commits',
     })
 
     log(`The file "${chalk.yellow(fileToSync)}" will be synced across the following repos:`)
     log(targetRepos.map((it) => ` - ${it.name}`).join('\n'))
-    log(`The commit message will be "${chalk.yellow(commitMessage.message)}"`)
+    log(`The commit message will be "${chalk.yellow(commitMessage)}"`)
 
     // Step 5, confirm
-    await hackilyFixBackToBackPrompt()
-    const confirmResult = await inquirer.prompt({
-        name: 'confirm',
-        type: 'confirm',
+    const confirmResult = await confirm({
         message: `Do you want to continue? This will create ${otherRepos.length} commits, one for each repo.`,
     })
 
-    if (confirmResult.confirm) {
-        await copyFileToRepos(sourceRepo, targetRepos, fileToSync, commitMessage.message)
+    if (confirmResult) {
+        await copyFileToRepos(sourceRepo, targetRepos, fileToSync, commitMessage)
     } else {
         log(chalk.red('Aborting!'))
     }
 }
 
 async function getValidFileInSource(sourceRepo: string, initialValue?: string): Promise<string> {
-    const file = await inquirer.prompt<{ file: string }>({
-        type: 'input',
-        name: 'file',
+    const file = await input({
         default: initialValue,
         message: `Which file in ${sourceRepo} should be synced across? \n (Path should be root in repo)`,
     })
 
-    const bunFile = Bun.file(path.join(GIT_CACHE_DIR, sourceRepo, file.file))
-    log(path.join(GIT_CACHE_DIR, sourceRepo, file.file))
+    const bunFile = Bun.file(path.join(GIT_CACHE_DIR, sourceRepo, file))
+    log(path.join(GIT_CACHE_DIR, sourceRepo, file))
     if (await bunFile.exists()) {
-        return file.file
+        return file
     }
 
-    log(chalk.red(`Could not find file ${file.file} in ${sourceRepo}`))
+    log(chalk.red(`Could not find file ${file} in ${sourceRepo}`))
 
-    return getValidFileInSource(sourceRepo, file.file)
+    return getValidFileInSource(sourceRepo, file)
 }
 
 async function copyFileToRepos(
