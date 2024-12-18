@@ -64,6 +64,7 @@ Nå er du klar til å bruke `tsm`!
 * `gh` - open github repo in browser
 * `kafka` - kafka cli for kafka stuff
 * `azure` - azure cli for azure stuff
+* `docker` - docker stuff
 
 <!-- COMPUTER SAYS DON'T TOUCH THIS END -->
 

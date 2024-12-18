@@ -33,6 +33,7 @@ import { syncCmd } from './actions/sync-cmd/sync-cmd.ts'
 import { syncRepoSettings } from './actions/repo-settings/sync.ts'
 import { checkBuilds } from './actions/builds/builds.ts'
 import { liveBuildDashboard } from './actions/builds/live/build-dashboard.tsx'
+import { dockerImages } from './actions/docker.ts'
 
 export const getYargsParser = (argv: string[]): Argv =>
     yargs(hideBin(argv))
@@ -463,6 +464,18 @@ export const getYargsParser = (argv: string[]): Argv =>
             () => {
                 log('Use one of the following commands: ')
                 log('\ttsm azure token "scope" "app-name"')
+            },
+        )
+        .command(
+            'docker',
+            'docker stuff',
+            (yargs) =>
+                yargs.command('images', 'see all the different images we use and which repo', async () => {
+                    await dockerImages()
+                }),
+            () => {
+                log('Use one of the following commands: ')
+                log('\ttsm docker images')
             },
         )
         .middleware(async (yargs) => {
