@@ -129,8 +129,6 @@ async function runCommand(
     )
     const diffPerFileMap = R.fromEntries(diffPerFile)
 
-    console.log(diffPerFileMap)
-
     // show diff in files
     log(
         diff.files
