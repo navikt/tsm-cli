@@ -6,8 +6,16 @@ En liten verktøykasse for #team-sykmelding
 
 ### Oppsett
 
--   Du må ha [Node.js](https://nodejs.org/en/) installert, husk å bruk verktøy som nvm eller asdf for å håndtere versjoner.
+-   Du må ha [Node.js](https://nodejs.org/en/) installert, husk å bruk verktøy som nvm, mise eller asdf for å håndtere versjoner.
 -   Du må ha [bun.sh](https://bun.sh) installert, dette kan installeres med curl (`curl -fsSL https://bun.sh/install | bash`)
+
+#### Node med mise
+Om du installerte node med mise må du køyre desse kommandoane i kommandolinja for å aktivere det.
+
+```
+echo 'eval "$(mise activate zsh --shims)"' >> ~/.zprofile # this sets up non-interactive sessions
+echo 'eval "$(mise activate zsh)"' >> ~/.zshrc    # this sets up interactive sessionseval "$(mise activate zsh)"
+```
 
 ### Konfigurasjon
 
@@ -27,6 +35,8 @@ Legg til denne i din `~/.bashrc` eller `~/.zshrc` fil:
 
 ```bash
 export NPM_AUTH_TOKEN=<din token>
+export ORG_GRADLE_PROJECT_githubPassword=<din token>
+export ORG_GRADLE_PROJECT_githubUser=x-access-token
 ```
 
 ### Installer CLI
