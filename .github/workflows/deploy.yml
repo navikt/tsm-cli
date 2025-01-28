@@ -39,7 +39,6 @@ jobs:
     needs: [build]
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
       - name: Setup github connection for auth
         run: |
           git config --global user.email "github-actions[bot]@users.noreply.github.com"
