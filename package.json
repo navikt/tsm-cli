@@ -3,7 +3,6 @@
     "type": "module",
     "scripts": {
         "tsc": "bun x tsc",
-        "test": "bun run build-cli && bun test",
         "lint": "bun x eslint src/**/*.ts",
         "lint-staged": "lint-staged",
         "build": "bun x rimraf tsm-cli/bin/tsm && bun run build-cli && bun run copy-html && bun run sanity-check",
@@ -35,7 +34,6 @@
         "@typescript-eslint/eslint-plugin": "^8.22.0",
         "eslint": "^8.54.0",
         "husky": "^9.1.7",
-        "interactive-cli-tester": "^0.3.0",
         "lint-staged": "^15.4.3",
         "prettier": "^3.4.2",
         "rimraf": "^6.0.1",

@@ -24,7 +24,6 @@ jobs:
       - run: bun run tsc
       - run: bun run lint
       - run: bun run build-cli
-      # - run: bun test
       - run: bun run copy-html
       - run: bun run sanity-check
       - run: cp bunfig.toml ./tsm-cli/bunfig.toml
