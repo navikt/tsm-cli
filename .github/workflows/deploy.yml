@@ -27,16 +27,12 @@ jobs:
       # - run: bun test
       - run: bun run copy-html
       - run: bun run sanity-check
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 20
-          registry-url: 'https://npm.pkg.github.com'
-          scope: '@navikt'
-      - run: npm publish
+      - run: cp bunfig.toml ./tsm-cli/bunfig.toml
+      - run: bun publish
         if: github.ref == 'refs/heads/main'
         working-directory: ./tsm-cli
         env:
-          NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          NPM_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
   increment-version:
     if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
