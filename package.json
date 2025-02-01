@@ -18,7 +18,7 @@
         "chalk": "^5.4.1",
         "date-fns": "^4.1.0",
         "fs-extra": "^11.3.0",
-        "octokit": "^3.2.0",
+        "octokit": "^4.1.0",
         "open": "^10.1.0",
         "remeda": "^2.20.0",
         "simple-git": "^3.27.0",
