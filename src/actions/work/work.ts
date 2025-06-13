@@ -107,6 +107,7 @@ export async function displayCommitsForPeriod(
 
             return R.filter(classifiedCommit, (commit) => commit.commit.author.user?.login === author)
         },
+        R.sortBy([(it) => it.commit.author.date, 'desc']),
         R.groupBy((it) => it.type),
     )
 
