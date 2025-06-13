@@ -1,6 +1,6 @@
 {
   "name": "@navikt/teamsykmelding-cli",
-  "version": "1.0.2025-01-28-1448",
+  "version": "1.0.2025-06-13-1125",
   "description": "CLI for diverse verktøy for teamsykmelding",
   "bin": {
     "tsm": "./bin/tsm",
