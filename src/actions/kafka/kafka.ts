@@ -2,10 +2,11 @@
 /* eslint-disable */
 import fs from 'fs-extra'
 
-import { CACHE_DIR } from '../common/cache.ts'
-import { log } from '../common/log.ts'
-import { getAllAppNames, promptForAppName } from '../common/kubectl.ts'
+import { CACHE_DIR } from '../../common/cache.ts'
+import { log } from '../../common/log.ts'
+import { getAllAppNames, promptForAppName } from '../../common/kubectl.ts'
 import chalk from 'chalk'
+import { tryAddContextToKafkactl } from './kafkactl.ts'
 
 function saveSecretToPath(secretData: any, path: string): void {
     Object.keys(secretData).forEach((key) => {
@@ -108,6 +109,8 @@ export async function kafkaConfig(appname: string | undefined | null): Promise<v
     log(`\nSaved kcat config:\n${chalk.bgCyan.black(`${basePath}/kcat.config`)}`)
     log(`\nSaved kafka config:\n${chalk.bgYellow.black(`${basePath}/kafka.config`)}`)
     log(`\nSaved Spring Boot config:\n${chalk.bgGreen.black(`${basePath}/application-dev-kafka.yaml`)}`)
+
+    await tryAddContextToKafkactl(appName, secretPath)
 }
 
 export async function cleanup() {
