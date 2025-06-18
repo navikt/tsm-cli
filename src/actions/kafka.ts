@@ -5,6 +5,7 @@ import fs from 'fs-extra'
 import { CACHE_DIR } from '../common/cache.ts'
 import { log } from '../common/log.ts'
 import { getAllAppNames, promptForAppName } from '../common/kubectl.ts'
+import chalk from 'chalk'
 
 function saveSecretToPath(secretData: any, path: string): void {
     Object.keys(secretData).forEach((key) => {
@@ -54,6 +55,28 @@ function saveJavaConfig(secretPath: string, configFile: string) {
 
     writeStream.end()
 }
+
+function saveSpringBootConfig(secretPath: string, configFile: string) {
+    const kafkaBrokers = fs.readFileSync(`${secretPath}/KAFKA_BROKERS`, 'utf-8').trim()
+    const kredstorePassword = fs.readFileSync(`${secretPath}/KAFKA_CREDSTORE_PASSWORD`, 'utf-8').trim()
+    fs.removeSync(configFile)
+    const writeStream = fs.createWriteStream(configFile, { flags: 'a' })
+
+    writeStream.write(`# Put this file in your resources folder, and start the spring boot server with the additional profile: dev-kafka
+spring:
+  kafka:
+    bootstrap-servers: ${kafkaBrokers}
+    security:
+      protocol: ssl
+    ssl:
+      key-store-type: PKCS12
+      trust-store-location: file:${secretPath}/client.truststore.jks
+      key-store-location: file:${secretPath}/client.keystore.p12
+      trust-store-password: ${kredstorePassword}
+      key-store-password: ${kredstorePassword}
+`)
+    writeStream.end()
+}
 export async function kafkaConfig(appname: string | undefined | null): Promise<void> {
     const context = Bun.spawnSync('kubectl config current-context'.split(' ')).stdout.toString().trim()
     const podListProc = Bun.spawn('kubectl get pods -l kafka=enabled -o json'.split(' '), {
@@ -80,9 +103,11 @@ export async function kafkaConfig(appname: string | undefined | null): Promise<v
     getAndSaveSecret(aivenSecret, secretPath)
     saveKafkaCatConfig(`${secretPath}`, `${basePath}/kcat.config`)
     saveJavaConfig(`${secretPath}`, `${basePath}/kafka.config`)
-    log(`Saved KafkaCat config to ${basePath}/kcat.config`)
-    log(`Saved kafka config to ${basePath}/kafka.config`)
-    log(`bootstrap.servers: ${fs.readFileSync(`${secretPath}/KAFKA_BROKERS`, 'utf-8').trim()}`)
+    saveSpringBootConfig(`${secretPath}`, `${basePath}/application-dev-kafka.yaml`)
+    log(`\nbootstrap.servers: ${chalk.green(fs.readFileSync(`${secretPath}/KAFKA_BROKERS`, 'utf-8').trim())}`)
+    log(`\nSaved kcat config:\n${chalk.bgCyan.black(`${basePath}/kcat.config`)}`)
+    log(`\nSaved kafka config:\n${chalk.bgYellow.black(`${basePath}/kafka.config`)}`)
+    log(`\nSaved Spring Boot config:\n${chalk.bgGreen.black(`${basePath}/application-dev-kafka.yaml`)}`)
 }
 
 export async function cleanup() {

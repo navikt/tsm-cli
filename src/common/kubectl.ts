@@ -20,6 +20,14 @@ export function getAllAppNames(pods: any[]): Map<string, any[]> {
 // eslint-disable-next-line
 export async function promptForAppName(appPodMap: Map<string, any>, appname: string | undefined | null) {
     const appNames: string[] = Array.from(appPodMap.keys())
+    if (appname != null && appNames.includes(appname)) {
+        log(`→ Using app: ${chalk.green(appname)}`)
+        return {
+            appName: appname,
+            pod: appPodMap.get(appname),
+        }
+    }
+
     const appInput = appname || ''
     const appName = await search({
         message: 'Start typing to search for an app',
