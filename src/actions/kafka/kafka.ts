@@ -110,7 +110,7 @@ export async function kafkaConfig(appname: string | undefined | null): Promise<v
     log(`\nSaved kafka config:\n${chalk.bgYellow.black(`${basePath}/kafka.config`)}`)
     log(`\nSaved Spring Boot config:\n${chalk.bgGreen.black(`${basePath}/application-dev-kafka.yaml`)}`)
 
-    await tryAddContextToKafkactl(appName, secretPath)
+    await tryAddContextToKafkactl(appName, context, secretPath)
 }
 
 export async function cleanup() {

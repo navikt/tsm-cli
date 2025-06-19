@@ -25,7 +25,7 @@ type KafkactlConfig = {
  *
  *  Under the root level "contexts" key. If the config file is found, we'll add it.
  */
-export async function tryAddContextToKafkactl(app: string, secretPath: string): Promise<void> {
+export async function tryAddContextToKafkactl(app: string, context: string, secretPath: string): Promise<void> {
     const config = Bun.file(expectedPath)
     if (!(await config.exists())) {
         log(chalk.yellow(`Debug: Found no kafkactl config at ${expectedPath}, skipping context addition`))
@@ -35,8 +35,10 @@ export async function tryAddContextToKafkactl(app: string, secretPath: string): 
     const kafkaBrokers = fs.readFileSync(`${secretPath}/KAFKA_BROKERS`, 'utf-8').trim()
     const configYaml = yaml.load(await config.text()) as KafkactlConfig
 
-    delete configYaml.contexts[app]
-    configYaml.contexts[app] = {
+    const contextKey = `${app}-${context}`
+
+    delete configYaml.contexts[contextKey]
+    configYaml.contexts[contextKey] = {
         brokers: kafkaBrokers,
         tls: {
             enabled: true,
@@ -46,11 +48,11 @@ export async function tryAddContextToKafkactl(app: string, secretPath: string): 
             certKey: `${secretPath}/KAFKA_PRIVATE_KEY`,
         },
     }
-    configYaml['current-context'] = app
+    configYaml['current-context'] = contextKey
 
     const updatedYaml = yaml.dump(configYaml)
 
     await config.write(updatedYaml)
 
-    log(`\nBonus:${chalk.green(`\nAdded ${chalk.blue(app)} context to ${chalk.bgCyan.black('kafkactl')}`)}`)
+    log(`\nBonus:${chalk.green(`\nAdded ${chalk.blue(contextKey)} context to ${chalk.bgCyan.black('kafkactl')}`)}`)
 }
