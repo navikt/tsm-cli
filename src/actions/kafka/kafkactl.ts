@@ -28,7 +28,6 @@ type KafkactlConfig = {
 export async function tryAddContextToKafkactl(app: string, context: string, secretPath: string): Promise<void> {
     const config = Bun.file(expectedPath)
     if (!(await config.exists())) {
-        log(chalk.yellow(`Debug: Found no kafkactl config at ${expectedPath}, skipping context addition`))
         return
     }
 

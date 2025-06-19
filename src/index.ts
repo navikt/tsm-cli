@@ -37,7 +37,7 @@ if (
     }
 }
 
-if (!semver || !semver.satisfies(Bun.version, '>= 1.0.25')) {
+if (!semver || !semver.satisfies(Bun.version, '>= 1.2.0')) {
     log(chalk.red('Oh no!!!!!'))
     log(`This version of ${chalk.blue('tsm')} requires at least ${chalk.green('bun')} version ${chalk.green('1.0.25')}`)
     log(`Please run ${chalk.green('bun upgrade')} to upgrade`)
