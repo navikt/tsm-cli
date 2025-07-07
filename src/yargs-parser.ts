@@ -34,6 +34,7 @@ import { syncRepoSettings } from './actions/repo-settings/sync.ts'
 import { checkBuilds } from './actions/builds/builds.ts'
 import { liveBuildDashboard } from './actions/builds/live/build-dashboard.tsx'
 import { dockerImages } from './actions/docker.ts'
+import { getSecret } from './actions/secret/secret.ts'
 
 export const getYargsParser = (argv: string[]): Argv =>
     yargs(hideBin(argv))
@@ -402,7 +403,17 @@ export const getYargsParser = (argv: string[]): Argv =>
                     }),
             async (args) => openRepoWeb(args.repo ?? null, args.skipCache || undefined),
         )
-
+        .command(
+            'secret [secret]',
+            'get secret',
+            (yargs) =>
+                yargs.positional('secret', {
+                    type: 'string',
+                    description: 'name of secret to get',
+                    default: null,
+                }),
+            async (args) => getSecret(args.secret ?? null),
+        )
         .command(
             'kafka',
             'kafka cli for kafka stuff',
