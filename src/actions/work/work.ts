@@ -111,17 +111,30 @@ export async function displayCommitsForPeriod(
         R.groupBy((it) => it.type),
     )
 
-    const { feat, fix, chore, docs, automated, 'dependabot-merge': dependabotMerges, unknown, ...rest } = result
+    const {
+        feat,
+        fix,
+        test,
+        perf,
+        chore,
+        docs,
+        automated,
+        'dependabot-merge': dependabotMerges,
+        unknown,
+        ...rest
+    } = result
     const orderedCategories: typeof result = {
         feat: feat ?? [],
         fix: fix ?? [],
+        test: test ?? [],
+        perf: perf ?? [],
         chore: chore ?? [],
         docs: docs ?? [],
         ...rest,
     }
 
     for (const category in orderedCategories) {
-        log(chalk.bold.bgBlueBright(category))
+        log(chalk.bold.bgBlueBright.white(category))
         if (orderedCategories[category].length === 0) {
             log(`  0 changes`)
             continue
