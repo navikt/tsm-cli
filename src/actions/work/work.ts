@@ -116,6 +116,7 @@ export async function displayCommitsForPeriod(
         fix,
         test,
         perf,
+        refactor,
         chore,
         docs,
         automated,
@@ -128,6 +129,7 @@ export async function displayCommitsForPeriod(
         fix: fix ?? [],
         test: test ?? [],
         perf: perf ?? [],
+        refactor: refactor ?? [],
         chore: chore ?? [],
         docs: docs ?? [],
         ...rest,
@@ -167,7 +169,7 @@ export async function displayCommitsForPeriod(
     }
 
     if (includeUncategorizeable && unknown?.length) {
-        log(chalk.bold.bgBlueBright('unknown'))
+        log(chalk.bold.bgBlueBright.white('unknown'))
         for (const commit of unknown) {
             const cleanMessage = commit.commit.message.split('\n')[0].trim()
 
