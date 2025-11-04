@@ -16,6 +16,9 @@ const authorOptions: Author[] = [
     ['Helene Arnesen', 'helene.arnesen@nav.no', 'helenearnesen'],
     ['Jørn-Are Flaten', 'ja.flaten91@gmail.com', 'jaflaten'],
     ['Lene Tillerli Omdal', 'lene.omdal@hotmail.com', 'leneomdal'],
+    ['Leo-Andreas Ervik', 'leo.ervik@gmail.com', 'leoervik'],
+    ['Halvor Grizzly Bjørn', 'mrbjoern92@gmail.com', 'mrbjoern'],
+    ['Erik Haug', 'erik.haug@nav.no', 'erikhaugnav'],
 ]
 
 export async function promptForCoAuthors(): Promise<Author[]> {
