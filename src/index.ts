@@ -50,4 +50,4 @@ if (!(await isTeamConfigured()) && !Bun.argv.includes('config')) {
     process.exit(1)
 }
 
-await getYargsParser(process.argv).demandCommand().strict().parse()
+await getYargsParser(process.argv).version(packageJson.version).demandCommand().strict().parse()
