@@ -2,59 +2,11 @@ import * as R from 'remeda'
 import chalk from 'chalk'
 import { $ } from 'bun'
 
-import {
-    BaseRepoNode,
-    BaseRepoNodeFragment,
-    ghGqlQuery,
-    OrgTeamRepoResult,
-    removeIgnoredAndArchived,
-} from '../common/octokit.ts'
-import { Gitter } from '../common/git.ts'
+import { getUpdatedGitterCache } from '../common/git.ts'
 import { log } from '../common/log.ts'
 import { GIT_CACHE_DIR } from '../common/cache.ts'
+import { getAllRepos } from '../common/repos.ts'
 import { getTeam } from '../common/config.ts'
-
-const reposQuery = /* GraphQL */ `
-    query ($team: String!) {
-        organization(login: "navikt") {
-            team(slug: $team) {
-                repositories(orderBy: { field: PUSHED_AT, direction: DESC }) {
-                    nodes {
-                        ...BaseRepoNode
-                    }
-                }
-            }
-        }
-    }
-
-    ${BaseRepoNodeFragment}
-`
-
-async function getAllRepos(): Promise<BaseRepoNode<unknown>[]> {
-    const team = await getTeam()
-
-    log(chalk.green(`Getting all active repositories for team ${team}...`))
-
-    const result = await ghGqlQuery<OrgTeamRepoResult<unknown>>(reposQuery, { team })
-
-    return removeIgnoredAndArchived(result.organization.team.repositories.nodes)
-}
-
-async function cloneAllRepos(): Promise<BaseRepoNode<unknown>[]> {
-    const gitter = new Gitter('cache')
-    const repos = await getAllRepos()
-    const results = await Promise.all(
-        repos.map((it) => gitter.cloneOrPull(it.name, it.defaultBranchRef.name, true, true)),
-    )
-
-    log(
-        `Updated ${chalk.yellow(results.filter((it) => it === 'updated').length)} and cloned ${chalk.yellow(
-            results.filter((it) => it === 'cloned').length,
-        )} repos`,
-    )
-
-    return repos
-}
 
 async function queryRepo(query: string, repo: string): Promise<boolean> {
     const result = await $`${{ raw: query }}`.cwd(`${GIT_CACHE_DIR}/${repo}`).quiet().throws(false)
@@ -63,7 +15,9 @@ async function queryRepo(query: string, repo: string): Promise<boolean> {
 }
 
 export async function queryForRelevantRepos(query: string): Promise<void> {
-    const repos = await cloneAllRepos()
+    const team = await getTeam()
+    const repos = await getAllRepos(team)
+    await getUpdatedGitterCache(repos)
 
     if (!query) {
         throw new Error('Missing query')

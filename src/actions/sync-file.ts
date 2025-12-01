@@ -7,21 +7,15 @@ import { search, input, checkbox, confirm } from '@inquirer/prompts'
 
 import { BaseRepoNode } from '../common/octokit.ts'
 import { log } from '../common/log.ts'
-import { Gitter } from '../common/git.ts'
+import { getUpdatedGitterCache, Gitter } from '../common/git.ts'
 import { GIT_CACHE_DIR } from '../common/cache.ts'
 import { getTeam } from '../common/config.ts'
 import { getAllRepos } from '../common/repos.ts'
 
 async function cloneAllRepos(): Promise<BaseRepoNode<unknown>[]> {
-    const gitter = new Gitter('cache')
     const repos = await getAllRepos(await getTeam())
-    const results = await Promise.all(repos.map((it) => gitter.cloneOrPull(it.name, it.defaultBranchRef.name, true)))
 
-    log(
-        `\nUpdated ${chalk.yellow(results.filter((it) => it === 'updated').length)} and cloned ${chalk.yellow(
-            results.filter((it) => it === 'cloned').length,
-        )} repos\n`,
-    )
+    await getUpdatedGitterCache(repos)
 
     return repos
 }

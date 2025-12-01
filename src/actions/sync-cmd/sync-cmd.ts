@@ -6,7 +6,7 @@ import { checkbox, confirm, input } from '@inquirer/prompts'
 
 import { getAllRepos } from '../../common/repos.ts'
 import { getTeam } from '../../common/config.ts'
-import { Gitter } from '../../common/git.ts'
+import { getUpdatedGitterCache, Gitter } from '../../common/git.ts'
 import { BaseRepoNode } from '../../common/octokit.ts'
 import { log } from '../../common/log.ts'
 import { GIT_CACHE_DIR } from '../../common/cache.ts'
@@ -20,7 +20,7 @@ export async function syncCmd(query: string | undefined, cmd: string | undefined
     }
 
     const repos = await getAllRepos(await getTeam())
-    await updateGitterCache(repos)
+    await getUpdatedGitterCache(repos)
 
     const queriedRepos = await Promise.all(repos.map(async (it) => [it, await queryRepo(query, it.name)] as const))
     const relevantRepos = R.pipe(
@@ -56,18 +56,6 @@ async function queryRepo(query: string, repo: string): Promise<boolean> {
     const result = await $`${{ raw: query }}`.cwd(`${GIT_CACHE_DIR}/${repo}`).quiet().throws(false)
 
     return result.exitCode === 0
-}
-
-async function updateGitterCache(repos: BaseRepoNode<unknown>[]): Promise<void> {
-    const gitter = new Gitter('cache')
-
-    const results = await Promise.all(repos.map((it) => gitter.cloneOrPull(it.name, it.defaultBranchRef.name, true)))
-
-    log(
-        `\nUpdated ${chalk.yellow(results.filter((it) => it === 'updated').length)} and cloned ${chalk.yellow(
-            results.filter((it) => it === 'cloned').length,
-        )} repos\n`,
-    )
 }
 
 async function getTargetRepos<Repo extends { name: string }>(otherRepos: Repo[]): Promise<Repo[]> {

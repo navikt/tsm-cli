@@ -1,10 +1,10 @@
 import * as R from 'remeda'
 import chalk from 'chalk'
 
-import { getAllRepos } from '../../common/repos.ts'
-import { getTeam } from '../../common/config.ts'
-import { getOctokitClient } from '../../common/octokit.ts'
-import { log, logNoNewLine } from '../../common/log.ts'
+import { getAllRepos } from '../../../common/repos.ts'
+import { getTeam } from '../../../common/config.ts'
+import { getOctokitClient } from '../../../common/octokit.ts'
+import { log, logNoNewLine } from '../../../common/log.ts'
 
 const EXPECTED_REPO_SETTINGS = {
     default_branch: 'main',

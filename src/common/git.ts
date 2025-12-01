@@ -2,9 +2,11 @@ import fs from 'node:fs'
 import path from 'node:path'
 
 import simpleGit, { CleanOptions, ResetMode, SimpleGit } from 'simple-git'
+import chalk from 'chalk'
 
 import { GIT_CACHE_DIR } from './cache.ts'
 import { log, logError, logProgressDot } from './log.ts'
+import { BaseRepoNode } from './octokit.ts'
 
 type GitterType = 'cache' | { type: 'user-config'; dir: string }
 
@@ -131,4 +133,17 @@ export class Gitter {
             return fs.existsSync(path.join(this.type.dir, repo))
         }
     }
+}
+
+export async function getUpdatedGitterCache(repos: BaseRepoNode<unknown>[]): Promise<Gitter> {
+    const gitter = new Gitter('cache')
+    const results = await Promise.all(repos.map((it) => gitter.cloneOrPull(it.name, it.defaultBranchRef.name, true)))
+
+    log(
+        `\nUpdated ${chalk.yellow(results.filter((it) => it === 'updated').length)} and cloned ${chalk.yellow(
+            results.filter((it) => it === 'cloned').length,
+        )} repos\n`,
+    )
+
+    return gitter
 }

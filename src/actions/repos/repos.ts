@@ -2,10 +2,10 @@ import * as R from 'remeda'
 import chalk from 'chalk'
 import { parseISO } from 'date-fns'
 
-import { log } from '../common/log.ts'
-import { BaseRepoNodeFragment, ghGqlQuery, OrgTeamRepoResult, removeIgnoredAndArchived } from '../common/octokit.ts'
-import { coloredTimestamp } from '../common/date-utils.ts'
-import { getTeam } from '../common/config.ts'
+import { log } from '../../common/log.ts'
+import { BaseRepoNodeFragment, ghGqlQuery, OrgTeamRepoResult, removeIgnoredAndArchived } from '../../common/octokit.ts'
+import { coloredTimestamp } from '../../common/date-utils.ts'
+import { getTeam } from '../../common/config.ts'
 
 type ExtraPropsOnRepo = {
     primaryLanguage: {

@@ -3,17 +3,15 @@ import path from 'node:path'
 import * as R from 'remeda'
 import chalk from 'chalk'
 
-import { Gitter } from '../common/git.ts'
+import { getUpdatedGitterCache } from '../common/git.ts'
 import { getAllRepos } from '../common/repos.ts'
 import { getTeam } from '../common/config.ts'
 import { GIT_CACHE_DIR } from '../common/cache.ts'
 import { log } from '../common/log.ts'
 
 export async function dockerImages(): Promise<void> {
-    const gitter = new Gitter('cache')
     const repos = await getAllRepos(await getTeam())
-
-    await Promise.all(repos.map((it) => gitter.cloneOrPull(it.name, it.defaultBranchRef.name, true)))
+    await getUpdatedGitterCache(repos)
 
     const repoToImage = await Promise.all(
         repos.map(async (it) => {

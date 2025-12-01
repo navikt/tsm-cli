@@ -1,33 +1,17 @@
 import path from 'node:path'
 
-import * as R from 'remeda'
 import chalk from 'chalk'
 import { search } from '@inquirer/prompts'
 
-import { BaseRepoNodeFragment, ghGqlQuery, OrgTeamRepoResult } from '../common/octokit.ts'
 import { CACHE_DIR } from '../common/cache.ts'
 import { log, logError } from '../common/log.ts'
 import { getTeam } from '../common/config.ts'
 import { openUrl } from '../common/open-url.ts'
-
-const reposForTeamQuery = /* GraphQL */ `
-    query ($team: String!) {
-        organization(login: "navikt") {
-            team(slug: $team) {
-                repositories(orderBy: { field: PUSHED_AT, direction: DESC }) {
-                    nodes {
-                        ...BaseRepoNode
-                    }
-                }
-            }
-        }
-    }
-
-    ${BaseRepoNodeFragment}
-`
+import { getAllRepos } from '../common/repos.ts'
+import { BaseRepoNode } from '../common/octokit.ts'
 
 export async function openRepoWeb(initialTerm: string | null, noCache: true | undefined): Promise<void> {
-    const repos = await getRepos(!noCache)
+    const repos = await getRepoNames(!noCache)
 
     const perfectMatch = repos.find((it) => it === initialTerm)
     if (perfectMatch != null) {
@@ -50,44 +34,31 @@ export async function openRepoWeb(initialTerm: string | null, noCache: true | un
     await openRepo(item)
 }
 
-async function getRepos(cache: boolean = true): Promise<string[]> {
+async function getRepoNames(cache: boolean = true): Promise<string[]> {
+    const team = await getTeam()
     if (!cache) {
-        return await fetchRepos().then((repos) => {
+        return await getAllRepos(team).then((repos) => {
             saveCachedRepos(repos)
 
-            return repos
+            return repos.map((it) => it.name)
         })
     }
 
-    upgradeCacheInBackground()
+    upgradeCacheInBackground(team)
 
     const cachedRepos = await loadCachedRepos()
     if (cachedRepos.length > 0) return cachedRepos
 
     log(chalk.blueBright('No cached repos found, fetching and populating cache... Next time will be faster :-)'))
-    return await fetchRepos().then((repos) => {
+    return await getAllRepos(team).then((repos) => {
         saveCachedRepos(repos)
 
-        return repos
+        return repos.map((it) => it.name)
     })
 }
 
-function upgradeCacheInBackground(): void {
-    fetchRepos().then((repos) => saveCachedRepos(repos))
-}
-
-async function fetchRepos(): Promise<string[]> {
-    const team = await getTeam()
-
-    const queryResult = await ghGqlQuery<OrgTeamRepoResult<unknown>>(reposForTeamQuery, {
-        team,
-    })
-
-    return R.pipe(
-        queryResult.organization.team.repositories.nodes,
-        R.filter((it) => !it.isArchived),
-        R.map((it) => it.name),
-    )
+function upgradeCacheInBackground(team: string): void {
+    getAllRepos(team).then((repos) => saveCachedRepos(repos))
 }
 
 async function loadCachedRepos(): Promise<string[]> {
@@ -103,10 +74,12 @@ async function loadCachedRepos(): Promise<string[]> {
     }
 }
 
-async function saveCachedRepos(repos: string[]): Promise<void> {
+async function saveCachedRepos(repos: BaseRepoNode<unknown>[]): Promise<void> {
     const team = await getTeam()
+    const repoNames = repos.map((it) => it.name)
+
     const cachedRepos = Bun.file(path.join(CACHE_DIR, `repos-${team}.json`))
-    await Bun.write(cachedRepos, JSON.stringify(repos))
+    await Bun.write(cachedRepos, JSON.stringify(repoNames))
 }
 
 async function openRepo(repo: string): Promise<void> {

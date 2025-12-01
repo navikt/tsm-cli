@@ -11,7 +11,7 @@ import { auth } from './actions/auth.ts'
 import { lastCommits } from './actions/last-commits.ts'
 import { openPrs } from './actions/prs.ts'
 import { queryForRelevantRepos } from './actions/repo-query.ts'
-import { getRepos } from './actions/repos.ts'
+import { getRepos } from './actions/repos/repos.ts'
 import { getConfig, updateConfig } from './common/config.ts'
 import { log, logError } from './common/log.ts'
 import { pullAllRepositories } from './actions/git.ts'
@@ -30,11 +30,12 @@ import { createSimpleSykmelding } from './actions/mock'
 import { displayCommitsForPeriod } from './actions/work/work.ts'
 import { openRepoWeb } from './actions/gh.ts'
 import { syncCmd } from './actions/sync-cmd/sync-cmd.ts'
-import { syncRepoSettings } from './actions/repo-settings/sync.ts'
+import { syncRepoSettings } from './actions/repos/settings/sync.ts'
 import { checkBuilds } from './actions/builds/builds.ts'
 import { liveBuildDashboard } from './actions/builds/live/build-dashboard.tsx'
 import { dockerImages } from './actions/docker.ts'
 import { getSecret } from './actions/secret/secret.ts'
+import { updateDistroless } from './actions/repos/distroless/distroless.ts'
 
 export const getYargsParser = (argv: string[]): Argv =>
     yargs(hideBin(argv))
@@ -87,13 +88,23 @@ export const getYargsParser = (argv: string[]): Argv =>
                     })
                     .option('sync-settings', {
                         type: 'boolean',
-                        conflicts: 'query',
+                        conflicts: ['query', 'update-distroless'],
+                        describe:
+                            'sync all repository settings across this teams repositories, e.g. merge settings etc.',
+                    })
+                    .option('update-distroless', {
+                        type: 'string',
+                        conflicts: ['query', 'sync-settings'],
                         describe:
                             'sync all repository settings across this teams repositories, e.g. merge settings etc.',
                     }),
             async (args) => {
                 if (args.syncSettings) {
                     return syncRepoSettings()
+                }
+
+                if (args.updateDistroless != null) {
+                    return updateDistroless(args.updateDistroless)
                 }
 
                 return args.query ? queryForRelevantRepos(args.query) : getRepos()
