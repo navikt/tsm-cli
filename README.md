@@ -72,6 +72,7 @@ Nå er du klar til å bruke `tsm`!
 * `open` - open command that opens a project in IntelliJ IDEA
 * `web` - open web page
 * `gh` - open github repo in browser
+* `search` - search github repos for a given regex
 * `secret` - get secret
 * `kafka` - kafka cli for kafka stuff
 * `azure` - azure cli for azure stuff

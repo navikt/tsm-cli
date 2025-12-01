@@ -36,6 +36,8 @@ import { liveBuildDashboard } from './actions/builds/live/build-dashboard.tsx'
 import { dockerImages } from './actions/docker.ts'
 import { getSecret } from './actions/secret/secret.ts'
 import { updateDistroless } from './actions/repos/distroless/distroless.ts'
+import { IDNUMBER_REGEX, searchRepos } from './actions/search/search.ts'
+import { addToIgnoreList, deleteFromIgnoreList, getIgnoreList } from './actions/search/ignore-list.ts'
 
 export const getYargsParser = (argv: string[]): Argv =>
     yargs(hideBin(argv))
@@ -413,6 +415,108 @@ export const getYargsParser = (argv: string[]): Argv =>
                         default: undefined,
                     }),
             async (args) => openRepoWeb(args.repo ?? null, args.skipCache || undefined),
+        )
+        .command(
+            'search',
+            'search github repos for a given regex',
+            (yargs) =>
+                yargs
+                    .option('team', {
+                        type: 'string',
+                        description: 'team to search in, defaults to current team',
+                        default: null,
+                    })
+                    .option('repo', {
+                        type: 'string',
+                        description:
+                            "repo to search in, defaults to all repos, if team not set this must be on the format 'owner/reponame'",
+                        default: null,
+                    })
+                    .option('search', {
+                        type: 'string',
+                        description: 'regex to search for, defaults to regex for id-numbers',
+                        default: IDNUMBER_REGEX.source,
+                    })
+                    .option('archived', {
+                        type: 'boolean',
+                        description: 'include archived repos in search',
+                        default: true,
+                    })
+                    .command('ignore', 'manage ignore list for each search term', (yargs) =>
+                        yargs
+                            .command(
+                                'add [value]',
+                                'Add to ignore list',
+                                (yargs) =>
+                                    yargs.positional('value', {
+                                        type: 'string',
+                                        description: 'value to add to ignore list',
+                                    }),
+                                async (args) => {
+                                    if (args.value != null) {
+                                        await addToIgnoreList(args.search, args.value)
+                                    } else {
+                                        logError(`Need to spesify a value to add`)
+                                        process.exit(1)
+                                    }
+                                },
+                            )
+                            .command(
+                                'remove [value]',
+                                'Remove from ignore list',
+                                (yargs) =>
+                                    yargs.positional('value', {
+                                        type: 'string',
+                                        description: 'value to add to ignore list',
+                                        default: null,
+                                    }),
+                                async (args) => {
+                                    if (args.value != null) {
+                                        await deleteFromIgnoreList(args.search, args.value)
+                                    } else {
+                                        logError(`Need to spesify a value to remove`)
+                                        process.exit(1)
+                                    }
+                                },
+                            )
+                            .command(
+                                'list [value]',
+                                'list ignore list',
+                                (yargs) =>
+                                    yargs.positional('value', {
+                                        type: 'string',
+                                        description: 'search term, to list specific ignore values',
+                                        required: false,
+                                        default: null,
+                                    }),
+                                async (args) => {
+                                    if (args.value != null) {
+                                        log(chalk.green(`Ignore list for ${args.value}`))
+                                        ;(await getIgnoreList(args.value)).forEach((item) => {
+                                            log(chalk.yellow(`\t${item}`))
+                                        })
+                                    } else {
+                                        const config = await getConfig()
+                                        const keys = Object.keys(config.searchIgnoreLists)
+                                        if (keys.length == 0) {
+                                            log(chalk.yellow('No ignore lists'))
+                                        } else {
+                                            keys.forEach((key) => {
+                                                log(
+                                                    chalk.yellowBright(
+                                                        `SearchTerm: ${chalk.bgMagenta(key)}, file: ${config.searchIgnoreLists[key]}`,
+                                                    ),
+                                                )
+                                            })
+                                        }
+                                    }
+                                },
+                            ),
+                    ),
+            async (argv) => {
+                // This handler runs for 'search' *without* the 'ignore' subcommand
+                await searchRepos(argv.team || undefined, argv.repo || undefined, argv.search, argv.archived)
+            },
         )
         .command(
             'secret [secret]',

@@ -18,12 +18,16 @@ type Config = {
     team: string
     gitDir: string | undefined
     ide: string | undefined
+    searchIgnoreLists: Record<string, string>
 }
 
-const defaultConfig: Omit<Config, 'team'> & Partial<Pick<Config, 'team'>> = {
+const defaultConfig:
+    | (Omit<Config, 'team'> & Partial<Pick<Config, 'team'>>)
+    | (Omit<Config, 'searchIgnoreLists'> & Partial<Pick<Config, 'searchIgnoreLists'>>) = {
     team: undefined,
     gitDir: undefined,
     ide: 'idea',
+    searchIgnoreLists: {},
 }
 
 export async function updateConfig(config: Partial<Config>): Promise<Config> {

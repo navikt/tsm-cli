@@ -1,11 +1,11 @@
 {
   "lockfileVersion": 1,
-  "configVersion": 0,
   "workspaces": {
     "": {
       "name": "teamsykmelding-cli",
       "dependencies": {
         "@inquirer/prompts": "^7.2.3",
+        "@navikt/fnrvalidator": "^2.1.5",
         "@types/js-yaml": "^4.0.9",
         "chalk": "^5.4.1",
         "date-fns": "^4.1.0",
@@ -87,6 +87,8 @@
     "@kwsites/promise-deferred": ["@kwsites/promise-deferred@1.1.1", "", {}, "sha512-GaHYm+c0O9MjZRu0ongGBRbinu8gVAMd2UZjji6jVmqKtZluZnptXGWhz1E8j8D2HJ3f/yMxKAUC0b+57wncIw=="],
 
     "@navikt/eslint-config-teamsykmelding": ["@navikt/eslint-config-teamsykmelding@7.1.0", "https://npm.pkg.github.com/download/@navikt/eslint-config-teamsykmelding/7.1.0/8891977f8bd817a5815ffc9d3fac7b3a30f5047b", { "dependencies": { "@typescript-eslint/eslint-plugin": "7.18.0", "@typescript-eslint/parser": "7.18.0", "eslint-config-prettier": "^9.1.0", "eslint-plugin-import": "^2.31.0", "eslint-plugin-prettier": "^5.2.1", "eslint-plugin-react": "^7.37.1", "eslint-plugin-react-hooks": "^5.0.0", "eslint-plugin-testing-library": "^6.4.0" }, "peerDependencies": { "eslint": ">=8", "prettier": ">=2", "typescript": ">=4" } }, "sha512-UT39mj6hT92fy1XN0jYLtB75ebF95iufZt/B6q7zZD1oiHt3ux6YalYc9WBQMXxcx7XuZFTXaIC5R8oQOBIUvQ=="],
+
+    "@navikt/fnrvalidator": ["@navikt/fnrvalidator@2.2.0", "https://npm.pkg.github.com/download/@navikt/fnrvalidator/2.2.0/4886b1ab78dabbca087adf379b81ba0ef27ebbd9", {}, "sha512-yz+7YYpTeP1tjdsj/RRZskzf7DMinTT8cUzPSMXGmCdY+rtFHNkJsp9ccfHLAgd9rk2k+ZXc9OEcySVwfq0e9Q=="],
 
     "@nodelib/fs.scandir": ["@nodelib/fs.scandir@2.1.5", "", { "dependencies": { "@nodelib/fs.stat": "2.0.5", "run-parallel": "^1.1.9" } }, "sha512-vq24Bq3ym5HEQm2NKCr3yXDwjc7vTsEThRDnkp2DK9p1uqLR+DHurm/NOTo0KG7HYHU7eppKZj3MyqYuMBf62g=="],
 
