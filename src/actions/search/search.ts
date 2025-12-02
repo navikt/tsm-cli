@@ -17,6 +17,7 @@ interface Result {
     repo: string
     commit: string
     author: string
+    message: string
     date: Date | null
 }
 export async function searchRepos(
@@ -83,7 +84,7 @@ export async function searchRepos(
         log(`   commits:`)
         occurrences.forEach((occ) => {
             log(
-                `     ↳ Commit ${chalk.green(occ.commit)} by ${occ.author} in ${occ.repo}, ${occ.date ? formatDistanceToNowStrict(occ.date, { addSuffix: true }) : 'unknown date'}`,
+                `\t↳ Commit ${chalk.green(occ.commit)} by ${occ.author} in ${occ.repo}, ${occ.date ? formatDistanceToNowStrict(occ.date, { addSuffix: true }) : 'unknown date'}\n\t\t🛈  ${chalk.blue('Message')}: ${occ.message}`,
             )
         })
         log('-'.repeat(40))
@@ -98,11 +99,19 @@ async function searchRepo(
     const results: Result[] = []
     const repoGit = gitter.createRepoGitClient(repoName)
 
-    const logOutput = await repoGit.raw(['log', '-p', '--all', '--unified=0', '--date=iso-strict'])
+    const logOutput = await repoGit.raw([
+        'log',
+        '-p',
+        '--all',
+        '--unified=0',
+        '--date=iso-strict',
+        '--format=HASH:%H%nAUTHOR:%an <%ae>%nISO:%ad%n%nCOMMIT:%s%n%n%b',
+    ])
 
     let currentCommit = 'Unknown'
     let currentAuthor = 'Unknown'
     let currentTimestamp = 'Unknown'
+    let currentMessage = 'Unknown'
     let found = false
 
     try {
@@ -110,12 +119,14 @@ async function searchRepo(
 
         for (const line of lines) {
             // Track context
-            if (line.startsWith('commit ')) {
-                currentCommit = line.substring(7, 15)
-            } else if (line.startsWith('Author: ')) {
-                currentAuthor = line.substring(8).trim()
-            } else if (line.startsWith('Date: ')) {
-                currentTimestamp = line.substring(8).trim()
+            if (line.startsWith('HASH:')) {
+                currentCommit = line.replace('HASH:', '').trim().substring(0, 8)
+            } else if (line.startsWith('AUTHOR:')) {
+                currentAuthor = line.replace('AUTHOR:', '').trim()
+            } else if (line.startsWith('ISO:')) {
+                currentTimestamp = line.replace('ISO:', '').trim()
+            } else if (line.startsWith('COMMIT:')) {
+                currentMessage = line.replace('COMMIT:', '').trim()
             }
 
             if (!line.startsWith('+')) continue
@@ -131,12 +142,13 @@ async function searchRepo(
                             repo: repoName,
                             commit: currentCommit,
                             author: currentAuthor,
+                            message: currentMessage,
                             date: currentTimestamp !== 'Unknown' ? parseISO(currentTimestamp) : null,
                         })
                         const commitDate = parseISO(currentTimestamp)
                         const distance = formatDistanceToNowStrict(commitDate, { addSuffix: true })
                         log(
-                            `\n  ${chalk.red('✖')} ${chalk.yellow(match)} in commit ${chalk.green(currentCommit)} by ${currentAuthor}, ${distance}`,
+                            `\n\t${chalk.red('✖')} ${chalk.yellow(match)} in commit ${chalk.green(currentCommit)} by ${currentAuthor}, ${distance}\n\t${chalk.blue('→ Message')}: ${currentMessage}`,
                         )
                     }
                 }
