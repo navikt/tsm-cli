@@ -47,9 +47,6 @@ export async function searchRepos(
         } catch (error) {
             logError(chalk.red(`\nError processing ${repo.name}:`), error)
         }
-
-        // Github ratelimit
-        await new Promise((resolve) => setTimeout(resolve, 100))
     }
 
     if (results.length === 0) {
