@@ -1,5 +1,6 @@
 import { idnr } from '@navikt/fnrvalidator'
 import chalk from 'chalk'
+import { formatDistanceToNowStrict, parseISO } from 'date-fns'
 
 import { getTeam } from '../../common/config.ts'
 import { getAllRepos, getRepo } from '../../common/repos.ts'
@@ -16,6 +17,7 @@ interface Result {
     repo: string
     commit: string
     author: string
+    date: Date | null
 }
 export async function searchRepos(
     team?: string,
@@ -80,7 +82,9 @@ export async function searchRepos(
 
         log(`   commits:`)
         occurrences.forEach((occ) => {
-            log(`     ↳ Commit ${chalk.green(occ.commit)} by ${occ.author} in ${occ.repo}`)
+            log(
+                `     ↳ Commit ${chalk.green(occ.commit)} by ${occ.author} in ${occ.repo}, ${occ.date ? formatDistanceToNowStrict(occ.date, { addSuffix: true }) : 'unknown date'}`,
+            )
         })
         log('-'.repeat(40))
     }
@@ -94,10 +98,11 @@ async function searchRepo(
     const results: Result[] = []
     const repoGit = gitter.createRepoGitClient(repoName)
 
-    const logOutput = await repoGit.raw(['log', '-p', '--all', '--unified=0'])
+    const logOutput = await repoGit.raw(['log', '-p', '--all', '--unified=0', '--date=iso-strict'])
 
     let currentCommit = 'Unknown'
     let currentAuthor = 'Unknown'
+    let currentTimestamp = 'Unknown'
     let found = false
 
     try {
@@ -109,6 +114,8 @@ async function searchRepo(
                 currentCommit = line.substring(7, 15)
             } else if (line.startsWith('Author: ')) {
                 currentAuthor = line.substring(8).trim()
+            } else if (line.startsWith('Date: ')) {
+                currentTimestamp = line.substring(8).trim()
             }
 
             if (!line.startsWith('+')) continue
@@ -117,15 +124,19 @@ async function searchRepo(
             if (matches) {
                 for (const match of matches) {
                     if (!shouldIgnore(searchRegexp, match, ignoreList)) {
+                        found = true
+
                         results.push({
                             hit: match,
                             repo: repoName,
                             commit: currentCommit,
                             author: currentAuthor,
+                            date: currentTimestamp !== 'Unknown' ? parseISO(currentTimestamp) : null,
                         })
-                        found = true
+                        const commitDate = parseISO(currentTimestamp)
+                        const distance = formatDistanceToNowStrict(commitDate, { addSuffix: true })
                         log(
-                            `\n  ${chalk.red('✖')} ${chalk.yellow(match)} in commit ${chalk.green(currentCommit)} by ${currentAuthor}`,
+                            `\n  ${chalk.red('✖')} ${chalk.yellow(match)} in commit ${chalk.green(currentCommit)} by ${currentAuthor}, ${distance}`,
                         )
                     }
                 }
