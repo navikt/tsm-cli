@@ -1,8 +1,3 @@
-import { mkdtemp, rm } from 'node:fs/promises'
-import { join } from 'node:path'
-import { tmpdir } from 'node:os'
-
-import { spawn } from 'bun'
 import { idnr } from '@navikt/fnrvalidator'
 import chalk from 'chalk'
 
@@ -10,6 +5,7 @@ import { getTeam } from '../../common/config.ts'
 import { getAllRepos, getRepo } from '../../common/repos.ts'
 import { logError, log, logNoNewLine } from '../../common/log.ts'
 import { BaseRepoNode } from '../../common/octokit.ts'
+import { Gitter, getUpdatedGitterCache } from '../../common/git.ts'
 
 import { getIgnoreList } from './ignore-list.ts'
 
@@ -39,30 +35,19 @@ export async function searchRepos(
         repos = tempRepos.filter((r) => r.name.includes(repoFilter ?? ''))
     }
 
+    const gitter = await getUpdatedGitterCache(repos)
+
     const results: Result[] = []
     for (const repo of repos) {
         logNoNewLine(repo.name)
-        const tempDir = await mkdtemp(join(tmpdir(), `scan-${repo.name}-`))
+
         try {
-            const cloneProc = spawn(['git', 'clone', '--quiet', `git@github.com:navikt/${repo.name}.git`, tempDir], {
-                stdout: 'ignore',
-                stderr: 'inherit',
-            })
-
-            await cloneProc.exited
-
-            if (cloneProc.exitCode !== 0) {
-                log(chalk.red('Failed to clone'))
-                continue
-            }
-
-            const repoResult = await searchRepo(tempDir, repo.name, regex, ignoreList)
+            const repoResult = await searchRepo(gitter, repo.name, regex, ignoreList)
             results.push(...repoResult)
         } catch (error) {
             logError(chalk.red(`\nError processing ${repo.name}:`), error)
-        } finally {
-            await rm(tempDir, { recursive: true, force: true })
         }
+
         // Github ratelimit
         await new Promise((resolve) => setTimeout(resolve, 100))
     }
@@ -104,58 +89,47 @@ export async function searchRepos(
     }
 }
 async function searchRepo(
-    repoPath: string,
+    gitter: Gitter,
     repoName: string,
     searchRegexp: RegExp,
     ignoreList: string[],
 ): Promise<Result[]> {
     const results: Result[] = []
-    const proc = spawn(['git', 'log', '-p', '--all', '--unified=0'], {
-        cwd: repoPath,
-        stdout: 'pipe',
-    })
+    const repoGit = gitter.createRepoGitClient(repoName)
 
-    const reader = proc.stdout.getReader()
-    const decoder = new TextDecoder()
-    let buffer = ''
+    const logOutput = await repoGit.raw(['log', '-p', '--all', '--unified=0'])
+
     let currentCommit = 'Unknown'
     let currentAuthor = 'Unknown'
     let found = false
 
     try {
-        while (true) {
-            const { done, value } = await reader.read()
-            if (done) break
+        const lines = logOutput.split('\n')
 
-            buffer += decoder.decode(value)
-            const lines = buffer.split('\n')
-            buffer = lines.pop() || ''
+        for (const line of lines) {
+            // Track context
+            if (line.startsWith('commit ')) {
+                currentCommit = line.substring(7, 15)
+            } else if (line.startsWith('Author: ')) {
+                currentAuthor = line.substring(8).trim()
+            }
 
-            for (const line of lines) {
-                // Track context
-                if (line.startsWith('commit ')) {
-                    currentCommit = line.substring(7, 15)
-                } else if (line.startsWith('Author: ')) {
-                    currentAuthor = line.substring(8).trim()
-                }
+            if (!line.startsWith('+')) continue
 
-                if (!line.startsWith('+')) continue
-
-                const matches = line.match(searchRegexp)
-                if (matches) {
-                    for (const match of matches) {
-                        if (!shouldIgnore(searchRegexp, match, ignoreList)) {
-                            results.push({
-                                hit: match,
-                                repo: repoName,
-                                commit: currentCommit,
-                                author: currentAuthor,
-                            })
-                            found = true
-                            log(
-                                `\n  ${chalk.red('✖')} ${chalk.yellow(match)} in commit ${chalk.green(currentCommit)} by ${currentAuthor}`,
-                            )
-                        }
+            const matches = line.match(searchRegexp)
+            if (matches) {
+                for (const match of matches) {
+                    if (!shouldIgnore(searchRegexp, match, ignoreList)) {
+                        results.push({
+                            hit: match,
+                            repo: repoName,
+                            commit: currentCommit,
+                            author: currentAuthor,
+                        })
+                        found = true
+                        log(
+                            `\n  ${chalk.red('✖')} ${chalk.yellow(match)} in commit ${chalk.green(currentCommit)} by ${currentAuthor}`,
+                        )
                     }
                 }
             }
