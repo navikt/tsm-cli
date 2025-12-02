@@ -56,6 +56,7 @@ Nå er du klar til å bruke `tsm`!
 * `commits` - get the last commits for every repo in the team
 * `prs` - get all open pull requests
 * `repos` - get all repos
+* `vulns` - get all vulnerabilities for the team (Github)
 * `builds` - checks all repos for failing builds (on main)
 * `git` - keep our repos in sync, ex: tsm git sync
 * `work` - see what has happened the last week (or more)

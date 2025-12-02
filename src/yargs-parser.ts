@@ -38,6 +38,7 @@ import { getSecret } from './actions/secret/secret.ts'
 import { updateDistroless } from './actions/repos/distroless/distroless.ts'
 import { IDNUMBER_REGEX, searchRepos } from './actions/search/search.ts'
 import { addToIgnoreList, deleteFromIgnoreList, getIgnoreList } from './actions/search/ignore-list.ts'
+import { getAllVulns } from './actions/vulns/vulns.ts'
 
 export const getYargsParser = (argv: string[]): Argv =>
     yargs(hideBin(argv))
@@ -110,6 +111,20 @@ export const getYargsParser = (argv: string[]): Argv =>
                 }
 
                 return args.query ? queryForRelevantRepos(args.query) : getRepos()
+            },
+        )
+        .command(
+            'vulns',
+            'get all vulnerabilities for the team (Github)',
+            (yargs) => yargs.option('levels', { type: 'array', default: ['LOW', 'MODERATE', 'HIGH', 'CRITICAL'] }),
+            async (args) => {
+                if (args.levels.some((it) => !['LOW', 'MODERATE', 'HIGH', 'CRITICAL'].includes(it as string))) {
+                    logError(
+                        `\nOne or more levels are not valid, use one of: \n\tLOW, MODERATE, HIGH, CRITICAL, was: ${args.levels.join(', ')}`,
+                    )
+                    process.exit(1)
+                }
+                return getAllVulns(args.levels as string[])
             },
         )
         .command(
