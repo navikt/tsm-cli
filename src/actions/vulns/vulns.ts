@@ -15,7 +15,7 @@ const allVulnerabilitiesForTeamQuery = /* GraphQL */ `
                         isArchived
                         pushedAt
                         url
-                        vulnerabilityAlerts(states: OPEN, first: 10) {
+                        vulnerabilityAlerts(states: OPEN, first: 100) {
                             nodes {
                                 state
                                 createdAt
@@ -34,6 +34,7 @@ const allVulnerabilitiesForTeamQuery = /* GraphQL */ `
                                         description
                                         id
                                         permalink
+                                        notificationsPermalink
                                         identifiers {
                                             type
                                             value
@@ -69,6 +70,7 @@ export interface RepoNodeVulns {
                     description: string
                     id: string
                     permalink: string
+                    notificationsPermalink: string
                     identifiers: {
                         type: string
                         value: string
@@ -87,7 +89,7 @@ export async function getAllVulns(levels: string[]): Promise<void> {
     for (const [level, repos] of Object.entries(vulnsByLevel)) {
         log(chalk.blue(`\n=== ${level} VULNERABILITIES ===`))
         for (const [repoName, vulns] of Object.entries(repos)) {
-            log(chalk.yellow(`\nRepository: ${repoName}`))
+            log(chalk.yellow(`\nRepository: ${repoName}`), `(${vulns[0].url})`)
             for (const vulnInfo of vulns) {
                 const vuln = vulnInfo.vulnerability
                 const sv = vuln.securityVulnerability
@@ -96,22 +98,19 @@ export async function getAllVulns(levels: string[]): Promise<void> {
                 const range = sv?.vulnerableVersionRange ?? 'unknown range'
                 const firstPatched = sv?.firstPatchedVersion?.identifier ?? 'N/A'
 
-                const alertUrl = `${vulnInfo.url}/security/advisories/${vuln.number}`
-                const cveId = sv?.advisory?.identifiers?.find((id: { type: string }) => id.type === 'CVE')?.value
-                const cveUrl = cveId ? `https://nvd.nist.gov/vuln/detail/${cveId}` : undefined
-
                 log(chalk.bold(`${pkg}`))
                 log(`  ${chalk.yellow('Vulnerability #')}${chalk.yellow(vuln.number)}`)
                 log(`  ${chalk.red('Affected range:')} ${range}`)
                 log(`  ${chalk.green('First patched version:')} ${firstPatched}`)
-
-                if (cveUrl) {
-                    log(`  ${chalk.cyan('CVE:')} ${cveUrl}`)
-                } else if (cveId) {
-                    log(`  ${chalk.cyan('CVE:')} ${cveId}`)
-                }
-
-                log(`  ${chalk.cyan('Repo security alert:')} ${alertUrl}`)
+                log(
+                    `  ${chalk.cyan('Notification:')} ${vulnInfo.vulnerability.securityVulnerability?.advisory.notificationsPermalink ?? 'No link'}`,
+                )
+                log(
+                    `  ${chalk.cyan('Advisory:')} ${vulnInfo.vulnerability.securityVulnerability?.advisory.permalink ?? 'No link'}`,
+                )
+                log(
+                    `  ${chalk.blueBright('Issue:')} ${`${vulnInfo.url}/security/dependabot/${vulnInfo.vulnerability.number}`}`,
+                )
             }
         }
     }
