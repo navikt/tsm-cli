@@ -6,10 +6,10 @@ import { checkbox, confirm, editor, input, select } from '@inquirer/prompts'
 
 import { getAllRepos } from '../../common/repos.ts'
 import { getTeam } from '../../common/config.ts'
-import { getGitterCache } from '../../common/git.ts'
 import { BaseRepoNode } from '../../common/octokit.ts'
 import { log } from '../../common/log.ts'
 import { CACHE_DIR, GIT_CACHE_DIR } from '../../common/cache.ts'
+import { getUpdatedGitterCache, Gitter } from '../../common/git.ts'
 
 const SYNC_REPLACE_STATE_FILE = path.join(CACHE_DIR, 'sync-replace-state.json')
 
@@ -47,6 +47,10 @@ export async function syncReplaceMenu(): Promise<'status' | 'new' | 'reset' | 'c
     log(chalk.blue('Sync Replace\n'))
     if (trackedCount > 0) {
         log(chalk.yellow(`${trackedCount} repo(s) with tracked changes\n`))
+    }
+    if (trackedCount === 0) {
+        const repos = await getAllRepos(await getTeam())
+        await getUpdatedGitterCache(repos)
     }
 
     return select({
@@ -126,7 +130,7 @@ export async function syncReplaceCommit(): Promise<void> {
 
     const commitMessage = await input({ message: `Enter commit message:` })
     const repos = await getAllRepos(await getTeam())
-    const gitter = getGitterCache()
+    const gitter = new Gitter('cache')
 
     const reposWithChanges: Array<{ repoName: string; files: string[]; repo: BaseRepoNode<unknown> }> = []
 
