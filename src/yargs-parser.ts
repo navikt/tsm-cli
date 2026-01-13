@@ -30,6 +30,14 @@ import { createSimpleSykmelding } from './actions/mock'
 import { displayCommitsForPeriod } from './actions/work/work.ts'
 import { openRepoWeb } from './actions/gh.ts'
 import { syncCmd } from './actions/sync-cmd/sync-cmd.ts'
+import {
+    syncReplace,
+    syncReplaceReset,
+    syncReplaceStatus,
+    syncReplaceCommit,
+    syncReplaceMenu,
+    syncReplaceInteractive,
+} from './actions/sync-replace/sync-replace.ts'
 import { syncRepoSettings } from './actions/repos/settings/sync.ts'
 import { checkBuilds } from './actions/builds/builds.ts'
 import { liveBuildDashboard } from './actions/builds/live/build-dashboard.tsx'
@@ -277,6 +285,57 @@ export const getYargsParser = (argv: string[]): Argv =>
                         describe: 'auto accept all changes',
                     }),
             async (args) => syncCmd(args.query, args.cmd, args.force ?? false),
+        )
+        .command(
+            'sync-replace',
+            'search and replace or delete text blocks across all repos',
+            (yargs) =>
+                yargs
+                    .command('reset', 'clear all tracked files', async () => syncReplaceReset())
+                    .command('status', 'show currently tracked files', async () => syncReplaceStatus())
+                    .command('commit', 'commit all tracked files', async () => syncReplaceCommit())
+                    .option('start', {
+                        type: 'string',
+                        alias: 's',
+                        describe: 'start pattern to match',
+                    })
+                    .option('end', {
+                        type: 'string',
+                        alias: 'e',
+                        describe: 'end pattern for multi-line match (if omitted, matches single line only)',
+                    })
+                    .option('replace', {
+                        type: 'string',
+                        alias: 'r',
+                        describe: 'replacement text (if omitted, matched lines are deleted)',
+                    })
+                    .option('file-pattern', {
+                        type: 'string',
+                        alias: 'g',
+                        default: '**/*',
+                        describe: 'file pattern to search in (default: **/*)',
+                    })
+                    .option('force', {
+                        type: 'boolean',
+                        alias: 'f',
+                        describe: 'auto accept all changes',
+                    }),
+            async (args) => {
+                if (args.start) {
+                    return syncReplace(args.start, args.end, args.replace, args.force ?? false, args.filePattern)
+                }
+                const choice = await syncReplaceMenu()
+                switch (choice) {
+                    case 'status':
+                        return syncReplaceStatus()
+                    case 'new':
+                        return syncReplaceInteractive()
+                    case 'reset':
+                        return syncReplaceReset()
+                    case 'commit':
+                        return syncReplaceCommit()
+                }
+            },
         )
         .command(
             'primary-branch',

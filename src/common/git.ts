@@ -147,3 +147,7 @@ export async function getUpdatedGitterCache(repos: BaseRepoNode<unknown>[]): Pro
 
     return gitter
 }
+
+export function getGitterCache(): Gitter {
+    return new Gitter('cache')
+}
