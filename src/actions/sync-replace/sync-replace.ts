@@ -329,7 +329,7 @@ async function findMatchesInRepo(
     const glob = new Bun.Glob(filePattern)
     const files: string[] = []
 
-    for await (const file of glob.scan({ cwd: repoDir, absolute: false })) {
+    for await (const file of glob.scan({ cwd: repoDir, absolute: false, dot: true })) {
         if (!file.startsWith('.git/') && !file.includes('node_modules/')) {
             files.push(file)
         }
