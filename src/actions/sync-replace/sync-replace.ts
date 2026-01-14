@@ -399,22 +399,47 @@ export async function syncReplaceCommit(): Promise<void> {
         return
     }
 
+    const successfulRepos: string[] = []
+    const failedRepos: string[] = []
+
     await Promise.all(
         reposWithChanges.map(async ({ repoName, files, repo }) => {
             log(`Committing and pushing ${chalk.blue(repoName)} (${files.length} file(s))`)
             const git = gitter.createRepoGitClient(repoName)
 
-            for (const file of files) {
-                await git.add(file)
-            }
+            try {
+                for (const file of files) {
+                    await git.add(file)
+                }
 
-            const pushResult: PushResult = await git.commit(commitMessage).push()
-            log(`${chalk.green(`Pushed to repo ${pushResult.repo}`)} - ${repo.url}`)
+                const pushResult: PushResult = await git.commit(commitMessage).push()
+                log(`${chalk.green(`Pushed to repo ${pushResult.repo}`)} - ${repo.url}`)
+                successfulRepos.push(repoName)
+            } catch (error) {
+                const errorMessage = error instanceof Error ? error.message : String(error)
+                log(chalk.red(`Error pushing ${repoName}: ${errorMessage}`))
+                failedRepos.push(repoName)
+            }
         }),
     )
 
-    await clearState()
-    log(chalk.green('\nState cleared. All tracked files have been committed.'))
+    const updatedModifiedFiles: Record<string, string[]> = {}
+    for (const repoName of failedRepos) {
+        if (state.modifiedFiles[repoName]) {
+            updatedModifiedFiles[repoName] = state.modifiedFiles[repoName]
+        }
+    }
+    await saveState({ modifiedFiles: updatedModifiedFiles })
+
+    if (successfulRepos.length > 0) {
+        log(chalk.green(`\nSuccessfully pushed ${successfulRepos.length} repo(s).`))
+    }
+    if (failedRepos.length > 0) {
+        log(chalk.red(`\nFailed to push ${failedRepos.length} repo(s). They remain tracked in state.`))
+        log(chalk.gray(`Run ${chalk.yellow('tsm sync-replace commit')} to retry.`))
+    } else {
+        log(chalk.green('State cleared. All tracked files have been committed.'))
+    }
 }
 
 interface MatchResult {
@@ -448,16 +473,24 @@ export async function syncReplace(
 
     const previousState = await loadState()
     const previouslyTrackedRepos = Object.keys(previousState.modifiedFiles)
+
+    let searchOnlyTracked = false
     if (previouslyTrackedRepos.length > 0) {
-        log(chalk.yellow(`Note: ${previouslyTrackedRepos.length} repo(s) have previously tracked changes.`))
-        log(
-            chalk.gray(
-                `Run ${chalk.yellow('tsm sync-replace status')} to see them, or ${chalk.yellow('tsm sync-replace reset')} to clear.\n`,
-            ),
-        )
+        log(chalk.yellow(`Active session: ${previouslyTrackedRepos.length} repo(s) with tracked changes.\n`))
+        searchOnlyTracked = await confirm({
+            message: 'Search only in tracked repos?',
+            default: true,
+        })
     }
 
-    const repos = await getAllRepos(await getTeam())
+    let repos: BaseRepoNode<unknown>[]
+    if (searchOnlyTracked) {
+        repos = previouslyTrackedRepos.map((name) => ({ name, url: '' }) as BaseRepoNode<unknown>)
+        log(chalk.gray(`Searching in ${repos.length} tracked repo(s)...\n`))
+    } else {
+        repos = await getAllRepos(await getTeam())
+    }
+
     const reposWithMatches: Array<{ repo: BaseRepoNode<unknown>; changes: FileChange[] }> = []
 
     for (const repo of repos) {
@@ -595,7 +628,9 @@ function displayMatchWithContext(content: string, match: MatchResult, replacemen
     }
 
     if (replacement !== undefined) {
-        log(chalk.green(`\n     + │ ${replacement.split('\n').join('\n     + │ ')}`))
+        const originalIndent = getIndentation(lines[match.startLine - 1])
+        const indentedReplacement = applyIndentation(replacement, originalIndent)
+        log(chalk.green(`\n     + │ ${indentedReplacement.split('\n').join('\n     + │ ')}`))
     } else {
         log(chalk.gray('\n     (will be deleted)'))
     }
@@ -688,6 +723,32 @@ function findMatches(content: string, startPattern: string, endPattern: string |
     return matches
 }
 
+function getIndentation(line: string): string {
+    const match = line.match(/^(\s*)/)
+    return match ? match[1] : ''
+}
+
+function applyIndentation(text: string, indent: string): string {
+    const lines = text.split('\n')
+
+    const nonEmptyLines = lines.filter((line) => line.trim().length > 0)
+    let minIndent = Infinity
+    for (const line of nonEmptyLines) {
+        const lineIndent = line.match(/^(\s*)/)?.[1].length ?? 0
+        if (lineIndent < minIndent) {
+            minIndent = lineIndent
+        }
+    }
+    if (minIndent === Infinity) minIndent = 0
+
+    return lines
+        .map((line) => {
+            const dedented = line.slice(minIndent)
+            return indent + dedented
+        })
+        .join('\n')
+}
+
 function applyReplacements(content: string, matches: MatchResult[], replacement: string | undefined): string {
     const lines = content.split('\n')
     const result: string[] = []
@@ -698,7 +759,11 @@ function applyReplacements(content: string, matches: MatchResult[], replacement:
 
     while (i < lines.length) {
         if (matchIndex < sortedMatches.length && i + 1 === sortedMatches[matchIndex].startLine) {
-            if (replacement !== undefined) result.push(replacement)
+            if (replacement !== undefined) {
+                const originalIndent = getIndentation(lines[i])
+                const indentedReplacement = applyIndentation(replacement, originalIndent)
+                result.push(indentedReplacement)
+            }
             i = sortedMatches[matchIndex].endLine
             matchIndex++
         } else {
