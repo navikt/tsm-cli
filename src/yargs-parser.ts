@@ -35,6 +35,9 @@ import {
     syncReplaceReset,
     syncReplaceStatus,
     syncReplaceCommit,
+    syncReplaceReview,
+    syncReplaceRediff,
+    syncReplaceOpenVscode,
     syncReplaceMenu,
     syncReplaceInteractive,
 } from './actions/sync-replace/sync-replace.ts'
@@ -293,6 +296,9 @@ export const getYargsParser = (argv: string[]): Argv =>
                 yargs
                     .command('reset', 'clear all tracked files', async () => syncReplaceReset())
                     .command('status', 'show currently tracked files', async () => syncReplaceStatus())
+                    .command('review', 'review each tracked file and keep or undo', async () => syncReplaceReview())
+                    .command('rediff', 'find and add new changes from tracked repos', async () => syncReplaceRediff())
+                    .command('vscode', 'open all tracked repos in VS Code', async () => syncReplaceOpenVscode())
                     .command('commit', 'commit all tracked files', async () => syncReplaceCommit())
                     .option('start', {
                         type: 'string',
@@ -315,6 +321,13 @@ export const getYargsParser = (argv: string[]): Argv =>
                         default: '**/*',
                         describe: 'file pattern to search in (default: **/*)',
                     })
+                    .option('repo-type', {
+                        type: 'string',
+                        alias: 't',
+                        default: 'all',
+                        choices: ['all', 'jvm', 'node'],
+                        describe: 'filter repos by type: all, jvm (Gradle/Kotlin/Java), or node',
+                    })
                     .option('force', {
                         type: 'boolean',
                         alias: 'f',
@@ -322,7 +335,14 @@ export const getYargsParser = (argv: string[]): Argv =>
                     }),
             async (args) => {
                 if (args.start) {
-                    return syncReplace(args.start, args.end, args.replace, args.force ?? false, args.filePattern)
+                    return syncReplace(
+                        args.start,
+                        args.end,
+                        args.replace,
+                        args.force ?? false,
+                        args.filePattern,
+                        args.repoType as 'all' | 'jvm' | 'node',
+                    )
                 }
                 const choice = await syncReplaceMenu()
                 switch (choice) {
@@ -330,6 +350,12 @@ export const getYargsParser = (argv: string[]): Argv =>
                         return syncReplaceStatus()
                     case 'new':
                         return syncReplaceInteractive()
+                    case 'review':
+                        return syncReplaceReview()
+                    case 'rediff':
+                        return syncReplaceRediff()
+                    case 'vscode':
+                        return syncReplaceOpenVscode()
                     case 'reset':
                         return syncReplaceReset()
                     case 'commit':

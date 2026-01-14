@@ -12,6 +12,7 @@ import { CACHE_DIR, GIT_CACHE_DIR } from '../../common/cache.ts'
 import { getUpdatedGitterCache, Gitter } from '../../common/git.ts'
 
 const SYNC_REPLACE_STATE_FILE = path.join(CACHE_DIR, 'sync-replace-state.json')
+const CONTEXT_LINES = 10
 
 interface SyncReplaceState {
     modifiedFiles: Record<string, string[]>
@@ -40,13 +41,16 @@ export async function syncReplaceReset(): Promise<void> {
     log(chalk.green('Sync-replace state has been reset. No files are tracked for commit.'))
 }
 
-export async function syncReplaceMenu(): Promise<'status' | 'new' | 'reset' | 'commit'> {
+export async function syncReplaceMenu(): Promise<
+    'status' | 'new' | 'reset' | 'commit' | 'review' | 'vscode' | 'rediff'
+> {
     const state = await loadState()
     const trackedCount = Object.keys(state.modifiedFiles).length
+    const totalFiles = Object.values(state.modifiedFiles).reduce((sum, files) => sum + files.length, 0)
 
     log(chalk.blue('Sync Replace\n'))
     if (trackedCount > 0) {
-        log(chalk.yellow(`${trackedCount} repo(s) with tracked changes\n`))
+        log(chalk.yellow(`${trackedCount} repo(s) with ${totalFiles} tracked file(s)\n`))
     }
     if (trackedCount === 0) {
         const repos = await getAllRepos(await getTeam())
@@ -58,6 +62,15 @@ export async function syncReplaceMenu(): Promise<'status' | 'new' | 'reset' | 'c
         choices: [
             { value: 'status' as const, name: 'Status - show tracked files' },
             { value: 'new' as const, name: 'Start new - run a new search/replace' },
+            ...(trackedCount > 0
+                ? [{ value: 'review' as const, name: 'Review - go through each file, keep or undo' }]
+                : []),
+            ...(trackedCount > 0
+                ? [{ value: 'rediff' as const, name: 'Rediff - find and add new changes from tracked repos' }]
+                : []),
+            ...(trackedCount > 0
+                ? [{ value: 'vscode' as const, name: 'Open in VS Code - open all tracked repos' }]
+                : []),
             { value: 'reset' as const, name: 'Reset - clear all tracked files' },
             { value: 'commit' as const, name: 'Commit and push - commit all tracked files' },
         ],
@@ -79,7 +92,37 @@ export async function syncReplaceInteractive(): Promise<void> {
     }
 
     const filePattern = await input({ message: 'Enter file pattern:', default: '**/*' })
-    await syncReplace(startPattern, endPattern, replacement, false, filePattern)
+    const repoType = await select({
+        message: 'Filter repos by type:',
+        choices: [
+            { value: 'all', name: 'All repos' },
+            { value: 'jvm', name: 'JVM repos (Gradle/Kotlin/Java)' },
+            { value: 'node', name: 'Node repos (package.json)' },
+        ],
+    })
+    await syncReplace(startPattern, endPattern, replacement, false, filePattern, repoType as RepoType)
+}
+
+type RepoType = 'all' | 'jvm' | 'node'
+
+async function isRepoOfType(repoName: string, repoType: RepoType): Promise<boolean> {
+    if (repoType === 'all') return true
+
+    const repoDir = path.join(GIT_CACHE_DIR, repoName)
+
+    if (repoType === 'jvm') {
+        const gradleFile = Bun.file(path.join(repoDir, 'build.gradle.kts'))
+        const gradleFileGroovy = Bun.file(path.join(repoDir, 'build.gradle'))
+        const pomFile = Bun.file(path.join(repoDir, 'pom.xml'))
+        return (await gradleFile.exists()) || (await gradleFileGroovy.exists()) || (await pomFile.exists())
+    }
+
+    if (repoType === 'node') {
+        const packageJson = Bun.file(path.join(repoDir, 'package.json'))
+        return await packageJson.exists()
+    }
+
+    return true
 }
 
 export async function syncReplaceStatus(): Promise<void> {
@@ -102,6 +145,189 @@ export async function syncReplaceStatus(): Promise<void> {
     log('')
     log(chalk.gray(`Run ${chalk.yellow('tsm sync-replace commit')} to commit these changes.`))
     log(chalk.gray(`Run ${chalk.yellow('tsm sync-replace reset')} to clear tracked files.`))
+}
+
+export async function syncReplaceRediff(): Promise<void> {
+    const state = await loadState()
+    const repoNames = Object.keys(state.modifiedFiles)
+
+    if (repoNames.length === 0) {
+        log(chalk.yellow('No repos are currently tracked.'))
+        return
+    }
+
+    const gitter = new Gitter('cache')
+    const updatedModifiedFiles: Record<string, string[]> = { ...state.modifiedFiles }
+    let newFilesFound = 0
+
+    for (const repoName of repoNames) {
+        const git = gitter.createRepoGitClient(repoName)
+        const trackedFiles = new Set(state.modifiedFiles[repoName])
+
+        const diffSummary = await git.diffSummary()
+        const allChangedFiles = diffSummary.files.map((f) => f.file)
+        const newFiles = allChangedFiles.filter((f) => !trackedFiles.has(f))
+
+        if (newFiles.length === 0) continue
+
+        log(chalk.blue(`\n${repoName}: ${newFiles.length} new changed file(s)\n`))
+
+        for (const file of newFiles) {
+            newFilesFound++
+            log(chalk.blue(`${'='.repeat(60)}`))
+            log(chalk.blue(`${repoName} - ${file}`))
+            log(chalk.blue(`${'='.repeat(60)}\n`))
+
+            try {
+                const diff = await git.diff([file])
+                if (diff) {
+                    displayDiff(diff)
+                }
+            } catch {
+                log(chalk.yellow('Could not get diff for this file'))
+            }
+
+            const shouldAdd = await confirm({
+                message: 'Add this file to tracked changes?',
+                default: true,
+            })
+
+            if (shouldAdd) {
+                if (!updatedModifiedFiles[repoName]) {
+                    updatedModifiedFiles[repoName] = []
+                }
+                updatedModifiedFiles[repoName].push(file)
+                log(chalk.green('Added to tracked files'))
+            } else {
+                log(chalk.yellow('Skipped'))
+            }
+        }
+    }
+
+    await saveState({ modifiedFiles: updatedModifiedFiles })
+
+    if (newFilesFound === 0) {
+        log(chalk.yellow('\nNo new changes found in tracked repos.'))
+    } else {
+        const totalFiles = Object.values(updatedModifiedFiles).reduce((sum, files) => sum + files.length, 0)
+        log(chalk.blue(`\n${'='.repeat(60)}`))
+        log(
+            chalk.green(
+                `Done. Now tracking ${totalFiles} file(s) in ${Object.keys(updatedModifiedFiles).length} repo(s).`,
+            ),
+        )
+    }
+}
+
+export async function syncReplaceOpenVscode(): Promise<void> {
+    const state = await loadState()
+    const repoNames = Object.keys(state.modifiedFiles)
+
+    if (repoNames.length === 0) {
+        log(chalk.yellow('No repos are currently tracked.'))
+        return
+    }
+
+    const repoPaths = repoNames.map((repoName) => path.join(GIT_CACHE_DIR, repoName))
+
+    log(chalk.blue(`Opening ${repoNames.length} repo(s) in VS Code...\n`))
+
+    const proc = Bun.spawn(['code', ...repoPaths], {
+        stdout: 'inherit',
+        stderr: 'inherit',
+    })
+    await proc.exited
+
+    log(chalk.green('Done'))
+}
+
+export async function syncReplaceReview(): Promise<void> {
+    const state = await loadState()
+    const repoNames = Object.keys(state.modifiedFiles)
+
+    if (repoNames.length === 0) {
+        log(chalk.yellow('No files are currently tracked for review.'))
+        return
+    }
+
+    const totalFiles = Object.values(state.modifiedFiles).reduce((sum, files) => sum + files.length, 0)
+    log(chalk.blue(`Reviewing ${totalFiles} file(s) in ${repoNames.length} repo(s)\n`))
+
+    const gitter = new Gitter('cache')
+    const updatedModifiedFiles: Record<string, string[]> = {}
+    let fileNumber = 0
+
+    for (const repoName of repoNames) {
+        const files = state.modifiedFiles[repoName]
+        const git = gitter.createRepoGitClient(repoName)
+        const keptFiles: string[] = []
+
+        for (const file of files) {
+            fileNumber++
+            log(chalk.blue(`\n${'='.repeat(60)}`))
+            log(chalk.blue(`[${fileNumber}/${totalFiles}] ${repoName} - ${file}`))
+            log(chalk.blue(`${'='.repeat(60)}\n`))
+
+            try {
+                const diff = await git.diff([file])
+                if (!diff) {
+                    log(chalk.yellow('No changes in this file (already reset or unchanged)'))
+                    continue
+                }
+                displayDiff(diff)
+            } catch {
+                log(chalk.yellow('Could not get diff for this file'))
+                continue
+            }
+
+            const choice = await select({
+                message: 'What do you want to do with this file?',
+                choices: [
+                    { value: 'keep', name: 'Keep changes' },
+                    { value: 'undo', name: 'Undo changes (restore original)' },
+                ],
+            })
+
+            if (choice === 'keep') {
+                keptFiles.push(file)
+                log(chalk.green('Keeping changes'))
+            } else {
+                await git.checkout([file])
+                log(chalk.yellow('Changes undone'))
+            }
+        }
+
+        if (keptFiles.length > 0) {
+            updatedModifiedFiles[repoName] = keptFiles
+        }
+    }
+
+    await saveState({ modifiedFiles: updatedModifiedFiles })
+
+    const keptRepos = Object.keys(updatedModifiedFiles).length
+    const keptFilesCount = Object.values(updatedModifiedFiles).reduce((sum, files) => sum + files.length, 0)
+    log(chalk.blue(`\n${'='.repeat(60)}`))
+    if (keptFilesCount > 0) {
+        log(chalk.green(`Review complete. ${keptFilesCount} file(s) in ${keptRepos} repo(s) kept.`))
+        log(chalk.gray(`Run ${chalk.yellow('tsm sync-replace commit')} to commit these changes.`))
+    } else {
+        log(chalk.yellow('All changes have been undone. No files tracked.'))
+    }
+}
+
+function displayDiff(diff: string): void {
+    const lines = diff.split('\n')
+    for (const line of lines) {
+        if (line.startsWith('+') && !line.startsWith('+++')) {
+            log(chalk.green(line))
+        } else if (line.startsWith('-') && !line.startsWith('---')) {
+            log(chalk.red(line))
+        } else if (line.startsWith('@@')) {
+            log(chalk.cyan(line))
+        } else {
+            log(chalk.gray(line))
+        }
+    }
 }
 
 export async function syncReplaceCommit(): Promise<void> {
@@ -201,7 +427,6 @@ interface MatchResult {
 interface FileChange {
     file: string
     originalContent: string
-    newContent: string
     matches: MatchResult[]
 }
 
@@ -211,12 +436,14 @@ export async function syncReplace(
     replacement: string | undefined,
     force: boolean,
     filePattern: string,
+    repoType: RepoType = 'all',
 ): Promise<void> {
     log(chalk.blue('Sync Replace'))
     log(chalk.gray(`Start pattern: ${startPattern}`))
     log(chalk.gray(`End pattern: ${endPattern ?? '(single line match)'}`))
     log(chalk.gray(`Replacement: ${replacement ?? '(delete matches)'}`))
     log(chalk.gray(`File pattern: ${filePattern}`))
+    log(chalk.gray(`Repo type: ${repoType}`))
     log('')
 
     const previousState = await loadState()
@@ -234,6 +461,7 @@ export async function syncReplace(
     const reposWithMatches: Array<{ repo: BaseRepoNode<unknown>; changes: FileChange[] }> = []
 
     for (const repo of repos) {
+        if (!(await isRepoOfType(repo.name, repoType))) continue
         const changes = await findMatchesInRepo(repo.name, startPattern, endPattern, filePattern)
         if (changes.length > 0) {
             reposWithMatches.push({ repo, changes })
@@ -245,14 +473,21 @@ export async function syncReplace(
         return
     }
 
-    log(chalk.green(`Found matches in ${reposWithMatches.length} repositories:\n`))
+    const totalMatches = reposWithMatches.reduce(
+        (sum, { changes }) => sum + changes.reduce((s, c) => s + c.matches.length, 0),
+        0,
+    )
+    log(chalk.green(`Found ${totalMatches} match(es) in ${reposWithMatches.length} repositories:\n`))
     reposWithMatches.forEach(({ repo, changes }) => {
-        const totalMatches = changes.reduce((sum, c) => sum + c.matches.length, 0)
-        log(`  ${chalk.blue(repo.name)}: ${totalMatches} match(es) in ${changes.length} file(s)`)
+        const matchCount = changes.reduce((sum, c) => sum + c.matches.length, 0)
+        log(`  ${chalk.blue(repo.name)}: ${matchCount} match(es) in ${changes.length} file(s)`)
     })
     log('')
 
-    const targetRepos = await selectRepos(reposWithMatches.map((r) => r.repo))
+    const targetRepos = await selectRepos(
+        reposWithMatches.map((r) => r.repo),
+        previouslyTrackedRepos,
+    )
     const selectedReposWithMatches = reposWithMatches.filter((r) => targetRepos.some((t) => t.name === r.repo.name))
 
     if (selectedReposWithMatches.length === 0) {
@@ -265,24 +500,49 @@ export async function syncReplace(
         modifiedFiles[repoName] = new Set(files)
     }
 
+    let matchNumber = 0
+    const selectedMatchCount = selectedReposWithMatches.reduce(
+        (sum, { changes }) => sum + changes.reduce((s, c) => s + c.matches.length, 0),
+        0,
+    )
+
     for (const { repo, changes } of selectedReposWithMatches) {
-        log(chalk.blue(`\n${'='.repeat(60)}`))
-        log(chalk.blue(`Repository: ${repo.name}`))
-        log(chalk.blue(`${'='.repeat(60)}\n`))
+        const approvedMatchesByFile: Map<string, MatchResult[]> = new Map()
 
-        displayChanges(changes, replacement)
+        for (const change of changes) {
+            for (const match of change.matches) {
+                matchNumber++
+                log(chalk.blue(`\n${'='.repeat(60)}`))
+                log(chalk.blue(`[${matchNumber}/${selectedMatchCount}] ${repo.name} - ${change.file}`))
+                log(chalk.blue(`${'='.repeat(60)}\n`))
 
-        const shouldApply = force || (await confirmWithViewOption(repo.name, changes, replacement))
+                displayMatchWithContext(change.originalContent, match, replacement)
 
-        if (shouldApply) {
-            await applyChangesToRepo(repo.name, changes, replacement)
-            if (!modifiedFiles[repo.name]) modifiedFiles[repo.name] = new Set()
-            for (const change of changes) {
-                modifiedFiles[repo.name].add(change.file)
+                const shouldApply =
+                    force ||
+                    (await confirm({
+                        message: 'Apply this change?',
+                        default: true,
+                    }))
+
+                if (shouldApply) {
+                    if (!approvedMatchesByFile.has(change.file)) {
+                        approvedMatchesByFile.set(change.file, [])
+                    }
+                    approvedMatchesByFile.get(change.file)!.push(match)
+                    log(chalk.green('Approved'))
+                } else {
+                    log(chalk.yellow('Skipped'))
+                }
             }
-            log(chalk.green(`Changes applied to ${repo.name}`))
-        } else {
-            log(chalk.yellow(`Skipped ${repo.name}`))
+        }
+
+        if (approvedMatchesByFile.size > 0) {
+            await applyApprovedChanges(repo.name, changes, approvedMatchesByFile, replacement)
+            if (!modifiedFiles[repo.name]) modifiedFiles[repo.name] = new Set()
+            for (const file of approvedMatchesByFile.keys()) {
+                modifiedFiles[repo.name].add(file)
+            }
         }
     }
 
@@ -318,6 +578,29 @@ export async function syncReplace(
     }
 }
 
+function displayMatchWithContext(content: string, match: MatchResult, replacement: string | undefined): void {
+    const lines = content.split('\n')
+    const startContext = Math.max(0, match.startLine - 1 - CONTEXT_LINES)
+    const endContext = Math.min(lines.length - 1, match.endLine - 1 + CONTEXT_LINES)
+
+    for (let i = startContext; i <= endContext; i++) {
+        const lineNum = (i + 1).toString().padStart(4, ' ')
+        const isMatchLine = i + 1 >= match.startLine && i + 1 <= match.endLine
+
+        if (isMatchLine) {
+            log(chalk.red(`${lineNum} - │ ${lines[i]}`))
+        } else {
+            log(chalk.gray(`${lineNum}   │ ${lines[i]}`))
+        }
+    }
+
+    if (replacement !== undefined) {
+        log(chalk.green(`\n     + │ ${replacement.split('\n').join('\n     + │ ')}`))
+    } else {
+        log(chalk.gray('\n     (will be deleted)'))
+    }
+}
+
 async function findMatchesInRepo(
     repoName: string,
     startPattern: string,
@@ -350,7 +633,7 @@ async function findMatchesInRepo(
 
         const matches = findMatches(content, startPattern, endPattern)
         if (matches.length > 0) {
-            changes.push({ file, originalContent: content, newContent: '', matches })
+            changes.push({ file, originalContent: content, matches })
         }
     }
 
@@ -411,10 +694,12 @@ function applyReplacements(content: string, matches: MatchResult[], replacement:
     let i = 0
     let matchIndex = 0
 
+    const sortedMatches = [...matches].sort((a, b) => a.startLine - b.startLine)
+
     while (i < lines.length) {
-        if (matchIndex < matches.length && i + 1 === matches[matchIndex].startLine) {
+        if (matchIndex < sortedMatches.length && i + 1 === sortedMatches[matchIndex].startLine) {
             if (replacement !== undefined) result.push(replacement)
-            i = matches[matchIndex].endLine
+            i = sortedMatches[matchIndex].endLine
             matchIndex++
         } else {
             result.push(lines[i])
@@ -425,111 +710,47 @@ function applyReplacements(content: string, matches: MatchResult[], replacement:
     return result.join('\n')
 }
 
-async function applyChangesToRepo(
+async function applyApprovedChanges(
     repoName: string,
     changes: FileChange[],
+    approvedMatchesByFile: Map<string, MatchResult[]>,
     replacement: string | undefined,
 ): Promise<void> {
     const repoDir = path.join(GIT_CACHE_DIR, repoName)
 
     for (const change of changes) {
+        const approvedMatches = approvedMatchesByFile.get(change.file)
+        if (!approvedMatches || approvedMatches.length === 0) continue
+
         const filePath = path.join(repoDir, change.file)
-        const newContent = applyReplacements(change.originalContent, change.matches, replacement)
+        const newContent = applyReplacements(change.originalContent, approvedMatches, replacement)
         await Bun.write(filePath, newContent)
-        log(chalk.gray(`  Written: ${change.file}`))
+        log(chalk.gray(`  Written: ${change.file} (${approvedMatches.length} change(s))`))
     }
 }
 
-function displayChanges(changes: FileChange[], replacement: string | undefined): void {
-    for (const change of changes) {
-        log(chalk.yellow(`File: ${change.file}`))
-        for (const match of change.matches) {
-            log(chalk.gray(`  Lines ${match.startLine}-${match.endLine}:`))
-            log(chalk.red('  - ' + match.matchedText.split('\n').join('\n  - ')))
-            if (replacement !== undefined) {
-                log(chalk.green('  + ' + replacement.split('\n').join('\n  + ')))
-            } else {
-                log(chalk.gray('  (will be deleted)'))
-            }
-            log('')
-        }
-    }
-}
+async function selectRepos<Repo extends { name: string }>(repos: Repo[], trackedRepoNames: string[]): Promise<Repo[]> {
+    const trackedInMatches = repos.filter((r) => trackedRepoNames.includes(r.name))
+    const hasTracked = trackedInMatches.length > 0
 
-async function confirmWithViewOption(
-    repoName: string,
-    changes: FileChange[],
-    replacement: string | undefined,
-): Promise<boolean> {
-    while (true) {
-        const choice = await select({
-            message: `What do you want to do with ${repoName}?`,
-            choices: [
-                { value: 'apply', name: 'Apply changes' },
-                { value: 'view', name: 'View full file(s) with diff' },
-                { value: 'skip', name: 'Skip' },
-            ],
-        })
+    const choices = [
+        { value: 'all', name: 'All repos' },
+        ...(hasTracked ? [{ value: 'tracked', name: `Only tracked repos (${trackedInMatches.length})` }] : []),
+        ...repos.map((it) => ({
+            name: trackedRepoNames.includes(it.name) ? `${it.name} (tracked)` : it.name,
+            value: it.name,
+        })),
+    ]
 
-        if (choice === 'apply') return true
-        if (choice === 'skip') return false
-
-        for (const change of changes) {
-            log(chalk.blue(`\n${'─'.repeat(60)}`))
-            log(chalk.blue(`File: ${change.file}`))
-            log(chalk.blue(`${'─'.repeat(60)}`))
-            log(formatFileWithDiff(change.originalContent, change.matches, replacement))
-            log('')
-        }
-    }
-}
-
-function formatFileWithDiff(content: string, matches: MatchResult[], replacement: string | undefined): string {
-    const lines = content.split('\n')
-    const result: string[] = []
-
-    const matchByStartLine = new Map<number, MatchResult>()
-    const matchedLineSet = new Set<number>()
-    for (const match of matches) {
-        matchByStartLine.set(match.startLine, match)
-        for (let i = match.startLine; i <= match.endLine; i++) matchedLineSet.add(i)
-    }
-
-    let lineNum = 1
-    for (let i = 0; i < lines.length; i++) {
-        const lineNumber = i + 1
-        const lineNumStr = lineNum.toString().padStart(4, ' ')
-
-        if (matchByStartLine.has(lineNumber)) {
-            const match = matchByStartLine.get(lineNumber)!
-            for (let j = match.startLine; j <= match.endLine; j++) {
-                result.push(chalk.red(`   - │ ${lines[j - 1]}`))
-            }
-            if (replacement !== undefined) {
-                for (const repLine of replacement.split('\n')) {
-                    result.push(chalk.green(`   + │ ${repLine}`))
-                }
-            }
-            i = match.endLine - 1
-            lineNum++
-        } else if (!matchedLineSet.has(lineNumber)) {
-            result.push(chalk.gray(`${lineNumStr} │`) + ` ${lines[i]}`)
-            lineNum++
-        }
-    }
-
-    return result.join('\n')
-}
-
-async function selectRepos<Repo extends { name: string }>(repos: Repo[]): Promise<Repo[]> {
     const response = await checkbox({
         message: 'Select repos to apply changes to',
-        choices: [{ value: 'all', name: 'All repos' }, ...repos.map((it) => ({ name: it.name, value: it.name }))],
+        choices,
     })
 
     if (response.includes('all')) return repos
+    if (response.includes('tracked')) return trackedInMatches
     if (response.length !== 0) return repos.filter((it) => response.includes(it.name))
 
     log(chalk.red('You must select at least one repo'))
-    return selectRepos(repos)
+    return selectRepos(repos, trackedRepoNames)
 }
