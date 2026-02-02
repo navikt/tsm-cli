@@ -332,6 +332,16 @@ export const getYargsParser = (argv: string[]): Argv =>
                         type: 'boolean',
                         alias: 'f',
                         describe: 'auto accept all changes',
+                    })
+                    .option('exclude-start', {
+                        type: 'boolean',
+                        alias: 'xs',
+                        describe: 'keep the line matching start pattern (only replace content after it)',
+                    })
+                    .option('exclude-end', {
+                        type: 'boolean',
+                        alias: 'xe',
+                        describe: 'keep the line matching end pattern (only replace content before it)',
                     }),
             async (args) => {
                 if (args.start) {
@@ -342,6 +352,8 @@ export const getYargsParser = (argv: string[]): Argv =>
                         args.force ?? false,
                         args.filePattern,
                         args.repoType as 'all' | 'jvm' | 'node',
+                        args.excludeStart ?? false,
+                        args.excludeEnd ?? false,
                     )
                 }
                 const choice = await syncReplaceMenu()

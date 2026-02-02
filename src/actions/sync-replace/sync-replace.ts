@@ -82,6 +82,20 @@ export async function syncReplaceInteractive(): Promise<void> {
     const endPatternInput = await input({ message: 'Enter end pattern (leave empty for single line match):' })
     const endPattern = endPatternInput.trim() || undefined
 
+    let excludeStart = false
+    let excludeEnd = false
+    if (endPattern) {
+        const excludeChoices = await checkbox({
+            message: 'Exclude boundaries from replacement?',
+            choices: [
+                { value: 'start', name: 'Exclude start line (keep line matching start pattern)' },
+                { value: 'end', name: 'Exclude end line (keep line matching end pattern)' },
+            ],
+        })
+        excludeStart = excludeChoices.includes('start')
+        excludeEnd = excludeChoices.includes('end')
+    }
+
     const useReplacement = await confirm({
         message: 'Do you want to replace matches? (No = delete matches)',
         default: true,
@@ -100,7 +114,16 @@ export async function syncReplaceInteractive(): Promise<void> {
             { value: 'node', name: 'Node repos (package.json)' },
         ],
     })
-    await syncReplace(startPattern, endPattern, replacement, false, filePattern, repoType as RepoType)
+    await syncReplace(
+        startPattern,
+        endPattern,
+        replacement,
+        false,
+        filePattern,
+        repoType as RepoType,
+        excludeStart,
+        excludeEnd,
+    )
 }
 
 type RepoType = 'all' | 'jvm' | 'node'
@@ -462,10 +485,15 @@ export async function syncReplace(
     force: boolean,
     filePattern: string,
     repoType: RepoType = 'all',
+    excludeStart: boolean = false,
+    excludeEnd: boolean = false,
 ): Promise<void> {
     log(chalk.blue('Sync Replace'))
     log(chalk.gray(`Start pattern: ${startPattern}`))
     log(chalk.gray(`End pattern: ${endPattern ?? '(single line match)'}`))
+    if (endPattern && (excludeStart || excludeEnd)) {
+        log(chalk.gray(`Exclude: ${[excludeStart && 'start', excludeEnd && 'end'].filter(Boolean).join(', ')}`))
+    }
     log(chalk.gray(`Replacement: ${replacement ?? '(delete matches)'}`))
     log(chalk.gray(`File pattern: ${filePattern}`))
     log(chalk.gray(`Repo type: ${repoType}`))
@@ -549,7 +577,7 @@ export async function syncReplace(
                 log(chalk.blue(`[${matchNumber}/${selectedMatchCount}] ${repo.name} - ${change.file}`))
                 log(chalk.blue(`${'='.repeat(60)}\n`))
 
-                displayMatchWithContext(change.originalContent, match, replacement)
+                displayMatchWithContext(change.originalContent, match, replacement, excludeStart, excludeEnd)
 
                 const shouldApply =
                     force ||
@@ -571,7 +599,7 @@ export async function syncReplace(
         }
 
         if (approvedMatchesByFile.size > 0) {
-            await applyApprovedChanges(repo.name, changes, approvedMatchesByFile, replacement)
+            await applyApprovedChanges(repo.name, changes, approvedMatchesByFile, replacement, excludeStart, excludeEnd)
             if (!modifiedFiles[repo.name]) modifiedFiles[repo.name] = new Set()
             for (const file of approvedMatchesByFile.keys()) {
                 modifiedFiles[repo.name].add(file)
@@ -611,16 +639,30 @@ export async function syncReplace(
     }
 }
 
-function displayMatchWithContext(content: string, match: MatchResult, replacement: string | undefined): void {
+function displayMatchWithContext(
+    content: string,
+    match: MatchResult,
+    replacement: string | undefined,
+    excludeStart: boolean = false,
+    excludeEnd: boolean = false,
+): void {
     const lines = content.split('\n')
     const startContext = Math.max(0, match.startLine - 1 - CONTEXT_LINES)
     const endContext = Math.min(lines.length - 1, match.endLine - 1 + CONTEXT_LINES)
 
+    const effectiveStartLine = excludeStart ? match.startLine + 1 : match.startLine
+    const effectiveEndLine = excludeEnd ? match.endLine - 1 : match.endLine
+
     for (let i = startContext; i <= endContext; i++) {
         const lineNum = (i + 1).toString().padStart(4, ' ')
-        const isMatchLine = i + 1 >= match.startLine && i + 1 <= match.endLine
+        const lineNumber = i + 1
+        const isExcludedBoundary =
+            (excludeStart && lineNumber === match.startLine) || (excludeEnd && lineNumber === match.endLine)
+        const isMatchLine = lineNumber >= effectiveStartLine && lineNumber <= effectiveEndLine
 
-        if (isMatchLine) {
+        if (isExcludedBoundary) {
+            log(chalk.yellow(`${lineNum} ~ │ ${lines[i]}`))
+        } else if (isMatchLine) {
             log(chalk.red(`${lineNum} - │ ${lines[i]}`))
         } else {
             log(chalk.gray(`${lineNum}   │ ${lines[i]}`))
@@ -628,7 +670,8 @@ function displayMatchWithContext(content: string, match: MatchResult, replacemen
     }
 
     if (replacement !== undefined) {
-        const originalIndent = getIndentation(lines[match.startLine - 1])
+        const indentSourceLine = excludeStart ? match.startLine : match.startLine - 1
+        const originalIndent = getIndentation(lines[Math.max(0, indentSourceLine)])
         const indentedReplacement = applyIndentation(replacement, originalIndent)
         log(chalk.green(`\n     + │ ${indentedReplacement.split('\n').join('\n     + │ ')}`))
     } else {
@@ -749,7 +792,13 @@ function applyIndentation(text: string, indent: string): string {
         .join('\n')
 }
 
-function applyReplacements(content: string, matches: MatchResult[], replacement: string | undefined): string {
+function applyReplacements(
+    content: string,
+    matches: MatchResult[],
+    replacement: string | undefined,
+    excludeStart: boolean = false,
+    excludeEnd: boolean = false,
+): string {
     const lines = content.split('\n')
     const result: string[] = []
     let i = 0
@@ -759,12 +808,29 @@ function applyReplacements(content: string, matches: MatchResult[], replacement:
 
     while (i < lines.length) {
         if (matchIndex < sortedMatches.length && i + 1 === sortedMatches[matchIndex].startLine) {
-            if (replacement !== undefined) {
-                const originalIndent = getIndentation(lines[i])
+            const match = sortedMatches[matchIndex]
+            const effectiveStartLine = excludeStart ? match.startLine + 1 : match.startLine
+            const effectiveEndLine = excludeEnd ? match.endLine - 1 : match.endLine
+
+            // Keep start line if excluded
+            if (excludeStart) {
+                result.push(lines[i])
+            }
+
+            // Add replacement if provided (only if there's content to replace)
+            if (replacement !== undefined && effectiveStartLine <= effectiveEndLine) {
+                const indentSourceLine = excludeStart ? match.startLine : match.startLine - 1
+                const originalIndent = getIndentation(lines[Math.max(0, indentSourceLine)])
                 const indentedReplacement = applyIndentation(replacement, originalIndent)
                 result.push(indentedReplacement)
             }
-            i = sortedMatches[matchIndex].endLine
+
+            // Keep end line if excluded
+            if (excludeEnd && match.endLine > match.startLine) {
+                result.push(lines[match.endLine - 1])
+            }
+
+            i = match.endLine
             matchIndex++
         } else {
             result.push(lines[i])
@@ -780,6 +846,8 @@ async function applyApprovedChanges(
     changes: FileChange[],
     approvedMatchesByFile: Map<string, MatchResult[]>,
     replacement: string | undefined,
+    excludeStart: boolean = false,
+    excludeEnd: boolean = false,
 ): Promise<void> {
     const repoDir = path.join(GIT_CACHE_DIR, repoName)
 
@@ -788,7 +856,13 @@ async function applyApprovedChanges(
         if (!approvedMatches || approvedMatches.length === 0) continue
 
         const filePath = path.join(repoDir, change.file)
-        const newContent = applyReplacements(change.originalContent, approvedMatches, replacement)
+        const newContent = applyReplacements(
+            change.originalContent,
+            approvedMatches,
+            replacement,
+            excludeStart,
+            excludeEnd,
+        )
         await Bun.write(filePath, newContent)
         log(chalk.gray(`  Written: ${change.file} (${approvedMatches.length} change(s))`))
     }
