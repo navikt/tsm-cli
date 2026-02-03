@@ -61,15 +61,18 @@ export async function updateToNewestVersion(): Promise<void> {
 export async function reportChangesSinceLast(existingVersion: string | null): Promise<void> {
     type GithubResponse = { sha: string; commit: { author: { name: string }; message: string } }[]
 
-    const response = await fetch('https://api.github.com/repos/navikt/teamsykmelding-cli/commits')
+    const response = await getOctokitClient('cli').request('GET /repos/{owner}/{repo}/commits', {
+        owner: 'navikt',
+        repo: 'teamsykmelding-cli',
+    })
 
-    if (!response.ok) {
-        logError(`Unable to fetch latest commits from github: ${response.status} ${response.statusText}`)
+    if (response.status !== 200) {
+        logError(`Unable to fetch latest commits from github: ${response.status}`)
         return
     }
 
     const changes = R.pipe(
-        (await response.json()) as GithubResponse,
+        response.data as GithubResponse,
         R.map(({ commit: { author, message } }) => [author.name, message.split('\n')[0]]),
         (commits) => {
             if (existingVersion == null) return commits
