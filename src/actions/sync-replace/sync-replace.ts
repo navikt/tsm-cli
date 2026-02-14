@@ -1,6 +1,8 @@
 import path from 'node:path'
+import { createInterface, emitKeypressEvents } from 'node:readline'
 
 import chalk from 'chalk'
+import { $ } from 'bun'
 import { PushResult } from 'simple-git'
 import { checkbox, confirm, editor, input, select } from '@inquirer/prompts'
 
@@ -12,10 +14,79 @@ import { CACHE_DIR, GIT_CACHE_DIR } from '../../common/cache.ts'
 import { getUpdatedGitterCache, Gitter } from '../../common/git.ts'
 
 const SYNC_REPLACE_STATE_FILE = path.join(CACHE_DIR, 'sync-replace-state.json')
+const SYNC_REPLACE_HISTORY_FILE = path.join(CACHE_DIR, 'sync-replace-history.json')
 const CONTEXT_LINES = 10
+const MAX_HISTORY = 20
 
 interface SyncReplaceState {
     modifiedFiles: Record<string, string[]>
+}
+
+interface InputHistory {
+    startPattern: string[]
+    endPattern: string[]
+    replacement: string[]
+    filePattern: string[]
+}
+
+async function loadHistory(): Promise<InputHistory> {
+    try {
+        const file = Bun.file(SYNC_REPLACE_HISTORY_FILE)
+        if (await file.exists()) {
+            return await file.json()
+        }
+    } catch {}
+    return { startPattern: [], endPattern: [], replacement: [], filePattern: [] }
+}
+
+async function saveHistory(history: InputHistory): Promise<void> {
+    await Bun.write(SYNC_REPLACE_HISTORY_FILE, JSON.stringify(history, null, 2))
+}
+
+function addToHistory(entries: string[], value: string): string[] {
+    if (!value.trim() || entries[0] === value) return entries
+    return [value, ...entries.filter((e) => e !== value)].slice(0, MAX_HISTORY)
+}
+
+async function inputWithHistory(entries: string[], message: string, defaultValue?: string): Promise<string> {
+    return new Promise((resolve) => {
+        const rl = createInterface({
+            input: process.stdin,
+            output: process.stdout,
+            history: [...entries],
+            historySize: MAX_HISTORY,
+            terminal: true,
+        })
+        const defaultHint = defaultValue ? chalk.gray(` (${defaultValue})`) : ''
+        rl.question(`${chalk.green('?')} ${chalk.bold(message)}${defaultHint} `, (answer) => {
+            rl.close()
+            resolve(answer.trim() || defaultValue || '')
+        })
+    })
+}
+
+async function replacementInput(entries: string[], message: string): Promise<string | undefined> {
+    const answer = await new Promise<string>((resolve) => {
+        const rl = createInterface({
+            input: process.stdin,
+            output: process.stdout,
+            history: [...entries],
+            historySize: MAX_HISTORY,
+            terminal: true,
+        })
+        const hint = chalk.gray(` (type inline, or ${chalk.yellow('e')} for editor)`)
+        rl.question(`${chalk.green('?')} ${chalk.bold(message)}${hint} `, (val) => {
+            rl.close()
+            resolve(val)
+        })
+    })
+
+    if (answer.trim() === 'e') {
+        const defaultText = entries[0] || ''
+        return (await editor({ message, default: defaultText })).trimEnd() || undefined
+    }
+
+    return answer.trim() || undefined
 }
 
 async function loadState(): Promise<SyncReplaceState> {
@@ -42,7 +113,7 @@ export async function syncReplaceReset(): Promise<void> {
 }
 
 export async function syncReplaceMenu(): Promise<
-    'status' | 'new' | 'reset' | 'commit' | 'review' | 'vscode' | 'rediff'
+    'status' | 'new' | 'reset' | 'commit' | 'review' | 'vscode' | 'rediff' | 'run'
 > {
     const state = await loadState()
     const trackedCount = Object.keys(state.modifiedFiles).length
@@ -71,6 +142,9 @@ export async function syncReplaceMenu(): Promise<
             ...(trackedCount > 0
                 ? [{ value: 'vscode' as const, name: 'Open in VS Code - open all tracked repos' }]
                 : []),
+            ...(trackedCount > 0
+                ? [{ value: 'run' as const, name: 'Run command - run a command in tracked repos' }]
+                : []),
             { value: 'reset' as const, name: 'Reset - clear all tracked files' },
             { value: 'commit' as const, name: 'Commit and push - commit all tracked files' },
         ],
@@ -78,12 +152,25 @@ export async function syncReplaceMenu(): Promise<
 }
 
 export async function syncReplaceInteractive(): Promise<void> {
-    const startPattern = await input({ message: 'Enter start pattern:' })
-    const endPatternInput = await input({ message: 'Enter end pattern (leave empty for single line match):' })
+    const history = await loadHistory()
+
+    const startPattern = await inputWithHistory(history.startPattern, 'Enter start pattern:')
+    history.startPattern = addToHistory(history.startPattern, startPattern)
+    await saveHistory(history)
+
+    const endPatternInput = await inputWithHistory(
+        history.endPattern,
+        'Enter end pattern (leave empty for single line match):',
+    )
     const endPattern = endPatternInput.trim() || undefined
+    if (endPattern) {
+        history.endPattern = addToHistory(history.endPattern, endPattern)
+        await saveHistory(history)
+    }
 
     let excludeStart = false
     let excludeEnd = false
+    let inlineReplace = false
     if (endPattern) {
         const excludeChoices = await checkbox({
             message: 'Exclude boundaries from replacement?',
@@ -94,6 +181,11 @@ export async function syncReplaceInteractive(): Promise<void> {
         })
         excludeStart = excludeChoices.includes('start')
         excludeEnd = excludeChoices.includes('end')
+    } else {
+        inlineReplace = await confirm({
+            message: 'Replace only the matched string (inline)? (No = replace entire line)',
+            default: false,
+        })
     }
 
     const useReplacement = await confirm({
@@ -102,10 +194,16 @@ export async function syncReplaceInteractive(): Promise<void> {
     })
     let replacement: string | undefined = undefined
     if (useReplacement) {
-        replacement = (await editor({ message: 'Enter replacement text (opens editor):' })).trimEnd() || undefined
+        replacement = await replacementInput(history.replacement, 'Enter replacement text:')
+    }
+    if (replacement) {
+        history.replacement = addToHistory(history.replacement, replacement)
+        await saveHistory(history)
     }
 
-    const filePattern = await input({ message: 'Enter file pattern:', default: '**/*' })
+    const filePattern = await inputWithHistory(history.filePattern, 'Enter file pattern:', '**/*')
+    history.filePattern = addToHistory(history.filePattern, filePattern)
+    await saveHistory(history)
     const repoType = await select({
         message: 'Filter repos by type:',
         choices: [
@@ -123,6 +221,7 @@ export async function syncReplaceInteractive(): Promise<void> {
         repoType as RepoType,
         excludeStart,
         excludeEnd,
+        inlineReplace,
     )
 }
 
@@ -262,6 +361,135 @@ export async function syncReplaceOpenVscode(): Promise<void> {
     await proc.exited
 
     log(chalk.green('Done'))
+}
+
+export async function syncReplaceRun(cmd?: string): Promise<void> {
+    const state = await loadState()
+    const repoNames = Object.keys(state.modifiedFiles)
+
+    if (repoNames.length === 0) {
+        log(chalk.yellow('No repos are currently tracked.'))
+        return
+    }
+
+    const command = cmd ?? (await input({ message: 'Enter command to run in each repo:' }))
+    if (!command.trim()) {
+        log(chalk.yellow('No command provided.'))
+        return
+    }
+
+    const concurrency = 4
+    const N = repoNames.length
+    const SPINNER = ['⠋', '⠙', '⠹', '⠸', '⠼', '⠴', '⠦', '⠧', '⠇', '⠏']
+
+    log(chalk.blue(`\nRunning ${chalk.yellow(command)} in ${N} repo(s)\n`))
+
+    for (const repoName of repoNames) {
+        process.stdout.write(chalk.gray(`  ○ ${repoName}`) + '\n')
+    }
+    process.stdout.write('\n' + chalk.gray(`  0/${N} completed`) + '\n')
+
+    const statuses = new Map<string, 'pending' | 'running' | 'done' | 'failed'>()
+    repoNames.forEach((r) => statuses.set(r, 'pending'))
+    const failedOutputs: Array<{ repo: string; stdout: string; stderr: string }> = []
+    let doneCount = 0
+    let spinnerFrame = 0
+
+    const writeLine = (linesUp: number, text: string): void => {
+        process.stdout.write(`\x1B[${linesUp}A\r\x1B[2K${text}\x1B[${linesUp}B\r`)
+    }
+
+    const renderRepo = (index: number): void => {
+        const name = repoNames[index]
+        const s = statuses.get(name)!
+        let text: string
+        switch (s) {
+            case 'pending':
+                text = chalk.gray(`  ○ ${name}`)
+                break
+            case 'running':
+                text = `  ${chalk.yellow(SPINNER[spinnerFrame])} ${name}`
+                break
+            case 'done':
+                text = `  ${chalk.green('✓')} ${name}`
+                break
+            case 'failed':
+                text = `  ${chalk.red('✗')} ${name}`
+                break
+        }
+        writeLine(N - index + 2, text)
+    }
+
+    const renderSummary = (): void => {
+        const failCount = failedOutputs.length
+        const successCount = doneCount - failCount
+        const pending = N - doneCount
+        const parts = [`${successCount} ${chalk.green('✓')}`, `${failCount} ${chalk.red('✗')}`]
+        if (pending > 0) parts.push(chalk.gray(`${pending} pending`))
+        writeLine(1, `  ${parts.join('  ')}`)
+    }
+
+    const spinnerInterval = setInterval(() => {
+        spinnerFrame = (spinnerFrame + 1) % SPINNER.length
+        for (let i = 0; i < N; i++) {
+            if (statuses.get(repoNames[i]) === 'running') {
+                renderRepo(i)
+            }
+        }
+    }, 80)
+
+    const runOne = async (repoName: string): Promise<void> => {
+        const index = repoNames.indexOf(repoName)
+        statuses.set(repoName, 'running')
+        renderRepo(index)
+
+        const repoDir = path.join(GIT_CACHE_DIR, repoName)
+        const result = await $`${{ raw: command }}`.cwd(repoDir).quiet().throws(false)
+
+        doneCount++
+        if (result.exitCode === 0) {
+            statuses.set(repoName, 'done')
+        } else {
+            statuses.set(repoName, 'failed')
+            failedOutputs.push({
+                repo: repoName,
+                stdout: result.stdout.toString().trim(),
+                stderr: result.stderr.toString().trim(),
+            })
+        }
+        renderRepo(index)
+        renderSummary()
+    }
+
+    const queue = [...repoNames]
+    const workers = Array.from({ length: Math.min(concurrency, queue.length) }, async () => {
+        while (queue.length > 0) {
+            const repo = queue.shift()!
+            await runOne(repo)
+        }
+    })
+    await Promise.all(workers)
+
+    clearInterval(spinnerInterval)
+
+    log('')
+    if (failedOutputs.length > 0) {
+        log(chalk.red('Failed:\n'))
+        for (const { repo, stdout, stderr } of failedOutputs) {
+            const output = stderr || stdout
+            if (!output) {
+                log(chalk.red(`  ${repo}: (no output)`))
+                continue
+            }
+            const lastLines = output
+                .split('\n')
+                .filter((l) => l.trim())
+                .slice(-5)
+                .join('\n')
+            log(chalk.red(`  ${repo}:`))
+            log(chalk.gray(`    ${lastLines.split('\n').join('\n    ')}\n`))
+        }
+    }
 }
 
 export async function syncReplaceReview(): Promise<void> {
@@ -470,12 +698,216 @@ interface MatchResult {
     startLine: number
     endLine: number
     matchedText: string
+    originalStartLine?: number
+    originalEndLine?: number
+}
+
+interface ExtraLinePattern {
+    trimmedContent: string
+    position: 'above' | 'below'
+    offset: number
 }
 
 interface FileChange {
     file: string
     originalContent: string
     matches: MatchResult[]
+}
+
+function autoExpandMatch(
+    content: string,
+    match: MatchResult,
+    extraLines: ExtraLinePattern[],
+): { startLine: number; endLine: number; appliedCount: number } {
+    const lines = content.split('\n')
+    let startLine = match.startLine
+    let endLine = match.endLine
+
+    const abovePatterns = extraLines.filter((e) => e.position === 'above').sort((a, b) => a.offset - b.offset)
+    for (const pattern of abovePatterns) {
+        const lineIdx = match.startLine - 1 - pattern.offset
+        if (lineIdx >= 0 && lines[lineIdx].trim() === pattern.trimmedContent) {
+            startLine = Math.min(startLine, lineIdx + 1)
+        } else {
+            break
+        }
+    }
+
+    const belowPatterns = extraLines.filter((e) => e.position === 'below').sort((a, b) => a.offset - b.offset)
+    for (const pattern of belowPatterns) {
+        const lineIdx = match.endLine - 1 + pattern.offset
+        if (lineIdx < lines.length && lines[lineIdx].trim() === pattern.trimmedContent) {
+            endLine = Math.max(endLine, lineIdx + 1)
+        } else {
+            break
+        }
+    }
+
+    const appliedCount = match.startLine - startLine + (endLine - match.endLine)
+    return { startLine, endLine, appliedCount }
+}
+
+function computeExtraLines(
+    originalMatch: MatchResult,
+    expandedStartLine: number,
+    expandedEndLine: number,
+    lines: string[],
+): ExtraLinePattern[] {
+    const extras: ExtraLinePattern[] = []
+
+    for (let i = expandedStartLine; i < originalMatch.startLine; i++) {
+        extras.push({
+            trimmedContent: lines[i - 1].trim(),
+            position: 'above',
+            offset: originalMatch.startLine - i,
+        })
+    }
+
+    for (let i = originalMatch.endLine + 1; i <= expandedEndLine; i++) {
+        extras.push({
+            trimmedContent: lines[i - 1].trim(),
+            position: 'below',
+            offset: i - originalMatch.endLine,
+        })
+    }
+
+    return extras
+}
+
+async function interactiveMatchReview(
+    content: string,
+    match: MatchResult,
+    replacement: string | undefined,
+    excludeStart: boolean,
+    excludeEnd: boolean,
+    inline: boolean,
+    startPattern: string,
+    extraLines: ExtraLinePattern[],
+    force: boolean,
+): Promise<{
+    action: 'apply' | 'skip'
+    expandedStartLine: number
+    expandedEndLine: number
+    newExtraLines: ExtraLinePattern[]
+}> {
+    const lines = content.split('\n')
+    const autoExpanded = autoExpandMatch(content, match, extraLines)
+    let currentStartLine = autoExpanded.startLine
+    let currentEndLine = autoExpanded.endLine
+
+    if (autoExpanded.appliedCount > 0) {
+        const aboveCount = match.startLine - currentStartLine
+        const belowCount = currentEndLine - match.endLine
+        const parts: string[] = []
+        if (aboveCount > 0) parts.push(`+${aboveCount} above`)
+        if (belowCount > 0) parts.push(`+${belowCount} below`)
+        log(chalk.cyan(`  Auto-included ${parts.join(', ')} (matching previous selection)\n`))
+    }
+
+    let displayLineCount = 0
+    const HINT = chalk.gray('  ↑↓ select lines  enter accept  s skip  z undo')
+
+    const render = (): void => {
+        const displayLines = buildMatchDisplay(
+            content,
+            match,
+            currentStartLine,
+            currentEndLine,
+            replacement,
+            excludeStart,
+            excludeEnd,
+            inline,
+            startPattern,
+        )
+        displayLineCount = displayLines.length + 1
+        for (const line of displayLines) {
+            log(line)
+        }
+        log(HINT)
+    }
+
+    const clearDisplay = (): void => {
+        for (let i = 0; i < displayLineCount; i++) {
+            process.stdout.write('\x1B[1A\x1B[2K')
+        }
+    }
+
+    render()
+
+    if (force) {
+        return {
+            action: 'apply',
+            expandedStartLine: currentStartLine,
+            expandedEndLine: currentEndLine,
+            newExtraLines: computeExtraLines(match, currentStartLine, currentEndLine, lines),
+        }
+    }
+
+    const undoStack: Array<{ start: number; end: number }> = []
+
+    return new Promise((resolve) => {
+        emitKeypressEvents(process.stdin)
+        const wasRaw = process.stdin.isRaw
+        process.stdin.setRawMode(true)
+        process.stdin.resume()
+
+        const cleanup = (): void => {
+            process.stdin.removeListener('keypress', handler)
+            process.stdin.setRawMode(wasRaw ?? false)
+        }
+
+        const handler = (_str: string | undefined, key: { name?: string; ctrl?: boolean }): void => {
+            if (key.ctrl && key.name === 'c') {
+                cleanup()
+                process.exit(0)
+            }
+
+            if (key.name === 'down' && currentEndLine < lines.length) {
+                undoStack.push({ start: currentStartLine, end: currentEndLine })
+                currentEndLine++
+                clearDisplay()
+                render()
+            } else if (key.name === 'up' && currentStartLine > 1) {
+                undoStack.push({ start: currentStartLine, end: currentEndLine })
+                currentStartLine--
+                clearDisplay()
+                render()
+            } else if (key.name === 'return') {
+                process.stdout.write('\x1B[1A\x1B[2K')
+                cleanup()
+                resolve({
+                    action: 'apply',
+                    expandedStartLine: currentStartLine,
+                    expandedEndLine: currentEndLine,
+                    newExtraLines: computeExtraLines(match, currentStartLine, currentEndLine, lines),
+                })
+            } else if (_str === 's') {
+                process.stdout.write('\x1B[1A\x1B[2K')
+                cleanup()
+                resolve({
+                    action: 'skip',
+                    expandedStartLine: currentStartLine,
+                    expandedEndLine: currentEndLine,
+                    newExtraLines: extraLines,
+                })
+            } else if (_str === 'z') {
+                const prev = undoStack.pop()
+                if (prev) {
+                    currentStartLine = prev.start
+                    currentEndLine = prev.end
+                } else if (currentStartLine !== match.startLine || currentEndLine !== match.endLine) {
+                    currentStartLine = match.startLine
+                    currentEndLine = match.endLine
+                } else {
+                    return
+                }
+                clearDisplay()
+                render()
+            }
+        }
+
+        process.stdin.on('keypress', handler)
+    })
 }
 
 export async function syncReplace(
@@ -487,12 +919,16 @@ export async function syncReplace(
     repoType: RepoType = 'all',
     excludeStart: boolean = false,
     excludeEnd: boolean = false,
+    inline: boolean = false,
 ): Promise<void> {
     log(chalk.blue('Sync Replace'))
     log(chalk.gray(`Start pattern: ${startPattern}`))
     log(chalk.gray(`End pattern: ${endPattern ?? '(single line match)'}`))
     if (endPattern && (excludeStart || excludeEnd)) {
         log(chalk.gray(`Exclude: ${[excludeStart && 'start', excludeEnd && 'end'].filter(Boolean).join(', ')}`))
+    }
+    if (inline) {
+        log(chalk.gray(`Mode: inline (replace matched string only)`))
     }
     log(chalk.gray(`Replacement: ${replacement ?? '(delete matches)'}`))
     log(chalk.gray(`File pattern: ${filePattern}`))
@@ -567,6 +1003,8 @@ export async function syncReplace(
         0,
     )
 
+    let extraLines: ExtraLinePattern[] = []
+
     for (const { repo, changes } of selectedReposWithMatches) {
         const approvedMatchesByFile: Map<string, MatchResult[]> = new Map()
 
@@ -577,20 +1015,31 @@ export async function syncReplace(
                 log(chalk.blue(`[${matchNumber}/${selectedMatchCount}] ${repo.name} - ${change.file}`))
                 log(chalk.blue(`${'='.repeat(60)}\n`))
 
-                displayMatchWithContext(change.originalContent, match, replacement, excludeStart, excludeEnd)
+                const result = await interactiveMatchReview(
+                    change.originalContent,
+                    match,
+                    replacement,
+                    excludeStart,
+                    excludeEnd,
+                    inline,
+                    startPattern,
+                    extraLines,
+                    force,
+                )
 
-                const shouldApply =
-                    force ||
-                    (await confirm({
-                        message: 'Apply this change?',
-                        default: true,
-                    }))
-
-                if (shouldApply) {
+                if (result.action === 'apply') {
+                    const expandedMatch: MatchResult = {
+                        ...match,
+                        startLine: result.expandedStartLine,
+                        endLine: result.expandedEndLine,
+                        originalStartLine: match.startLine,
+                        originalEndLine: match.endLine,
+                    }
                     if (!approvedMatchesByFile.has(change.file)) {
                         approvedMatchesByFile.set(change.file, [])
                     }
-                    approvedMatchesByFile.get(change.file)!.push(match)
+                    approvedMatchesByFile.get(change.file)!.push(expandedMatch)
+                    extraLines = result.newExtraLines
                     log(chalk.green('Approved'))
                 } else {
                     log(chalk.yellow('Skipped'))
@@ -599,7 +1048,16 @@ export async function syncReplace(
         }
 
         if (approvedMatchesByFile.size > 0) {
-            await applyApprovedChanges(repo.name, changes, approvedMatchesByFile, replacement, excludeStart, excludeEnd)
+            await applyApprovedChanges(
+                repo.name,
+                changes,
+                approvedMatchesByFile,
+                replacement,
+                excludeStart,
+                excludeEnd,
+                inline,
+                startPattern,
+            )
             if (!modifiedFiles[repo.name]) modifiedFiles[repo.name] = new Set()
             for (const file of approvedMatchesByFile.keys()) {
                 modifiedFiles[repo.name].add(file)
@@ -639,16 +1097,21 @@ export async function syncReplace(
     }
 }
 
-function displayMatchWithContext(
+function buildMatchDisplay(
     content: string,
     match: MatchResult,
+    expandedStartLine: number,
+    expandedEndLine: number,
     replacement: string | undefined,
     excludeStart: boolean = false,
     excludeEnd: boolean = false,
-): void {
+    inline: boolean = false,
+    startPattern: string = '',
+): string[] {
+    const output: string[] = []
     const lines = content.split('\n')
-    const startContext = Math.max(0, match.startLine - 1 - CONTEXT_LINES)
-    const endContext = Math.min(lines.length - 1, match.endLine - 1 + CONTEXT_LINES)
+    const startContext = Math.max(0, expandedStartLine - 1 - CONTEXT_LINES)
+    const endContext = Math.min(lines.length - 1, expandedEndLine - 1 + CONTEXT_LINES)
 
     const effectiveStartLine = excludeStart ? match.startLine + 1 : match.startLine
     const effectiveEndLine = excludeEnd ? match.endLine - 1 : match.endLine
@@ -658,25 +1121,46 @@ function displayMatchWithContext(
         const lineNumber = i + 1
         const isExcludedBoundary =
             (excludeStart && lineNumber === match.startLine) || (excludeEnd && lineNumber === match.endLine)
-        const isMatchLine = lineNumber >= effectiveStartLine && lineNumber <= effectiveEndLine
+        const isOriginalMatch = lineNumber >= effectiveStartLine && lineNumber <= effectiveEndLine
+        const isExpandedLine =
+            (lineNumber >= expandedStartLine && lineNumber < match.startLine) ||
+            (lineNumber > match.endLine && lineNumber <= expandedEndLine)
 
         if (isExcludedBoundary) {
-            log(chalk.yellow(`${lineNum} ~ │ ${lines[i]}`))
-        } else if (isMatchLine) {
-            log(chalk.red(`${lineNum} - │ ${lines[i]}`))
+            output.push(chalk.yellow(`${lineNum} ~ │ ${lines[i]}`))
+        } else if (isOriginalMatch) {
+            output.push(chalk.red(`${lineNum} - │ ${lines[i]}`))
+        } else if (isExpandedLine) {
+            output.push(chalk.magenta(`${lineNum} - │ ${lines[i]}`))
         } else {
-            log(chalk.gray(`${lineNum}   │ ${lines[i]}`))
+            output.push(chalk.gray(`${lineNum}   │ ${lines[i]}`))
         }
     }
 
-    if (replacement !== undefined) {
+    if (
+        inline &&
+        match.startLine === match.endLine &&
+        expandedStartLine === match.startLine &&
+        expandedEndLine === match.endLine
+    ) {
+        const line = lines[match.startLine - 1]
+        const newLine = line.replaceAll(startPattern, replacement ?? '')
+        output.push('')
+        output.push(chalk.green(`     + │ ${newLine}`))
+    } else if (replacement !== undefined) {
         const indentSourceLine = excludeStart ? match.startLine : match.startLine - 1
         const originalIndent = getIndentation(lines[Math.max(0, indentSourceLine)])
         const indentedReplacement = applyIndentation(replacement, originalIndent)
-        log(chalk.green(`\n     + │ ${indentedReplacement.split('\n').join('\n     + │ ')}`))
+        output.push('')
+        for (const repLine of indentedReplacement.split('\n')) {
+            output.push(chalk.green(`     + │ ${repLine}`))
+        }
     } else {
-        log(chalk.gray('\n     (will be deleted)'))
+        output.push('')
+        output.push(chalk.gray('     (lines will be deleted)'))
     }
+
+    return output
 }
 
 async function findMatchesInRepo(
@@ -798,6 +1282,8 @@ function applyReplacements(
     replacement: string | undefined,
     excludeStart: boolean = false,
     excludeEnd: boolean = false,
+    inline: boolean = false,
+    startPattern: string = '',
 ): string {
     const lines = content.split('\n')
     const result: string[] = []
@@ -809,25 +1295,29 @@ function applyReplacements(
     while (i < lines.length) {
         if (matchIndex < sortedMatches.length && i + 1 === sortedMatches[matchIndex].startLine) {
             const match = sortedMatches[matchIndex]
-            const effectiveStartLine = excludeStart ? match.startLine + 1 : match.startLine
-            const effectiveEndLine = excludeEnd ? match.endLine - 1 : match.endLine
+            const origStartLine = match.originalStartLine ?? match.startLine
+            const origEndLine = match.originalEndLine ?? match.endLine
 
-            // Keep start line if excluded
-            if (excludeStart) {
-                result.push(lines[i])
+            if (inline && origStartLine === origEndLine) {
+                result.push(lines[origStartLine - 1].replaceAll(startPattern, replacement ?? ''))
+                i = match.endLine
+                matchIndex++
+                continue
             }
 
-            // Add replacement if provided (only if there's content to replace)
+            const effectiveStartLine = excludeStart ? origStartLine + 1 : origStartLine
+            const effectiveEndLine = excludeEnd ? origEndLine - 1 : origEndLine
+            if (excludeStart) {
+                result.push(lines[origStartLine - 1])
+            }
             if (replacement !== undefined && effectiveStartLine <= effectiveEndLine) {
-                const indentSourceLine = excludeStart ? match.startLine : match.startLine - 1
+                const indentSourceLine = excludeStart ? origStartLine : origStartLine - 1
                 const originalIndent = getIndentation(lines[Math.max(0, indentSourceLine)])
                 const indentedReplacement = applyIndentation(replacement, originalIndent)
                 result.push(indentedReplacement)
             }
-
-            // Keep end line if excluded
-            if (excludeEnd && match.endLine > match.startLine) {
-                result.push(lines[match.endLine - 1])
+            if (excludeEnd && origEndLine > origStartLine) {
+                result.push(lines[origEndLine - 1])
             }
 
             i = match.endLine
@@ -848,6 +1338,8 @@ async function applyApprovedChanges(
     replacement: string | undefined,
     excludeStart: boolean = false,
     excludeEnd: boolean = false,
+    inline: boolean = false,
+    startPattern: string = '',
 ): Promise<void> {
     const repoDir = path.join(GIT_CACHE_DIR, repoName)
 
@@ -862,6 +1354,8 @@ async function applyApprovedChanges(
             replacement,
             excludeStart,
             excludeEnd,
+            inline,
+            startPattern,
         )
         await Bun.write(filePath, newContent)
         log(chalk.gray(`  Written: ${change.file} (${approvedMatches.length} change(s))`))

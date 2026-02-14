@@ -38,6 +38,7 @@ import {
     syncReplaceReview,
     syncReplaceRediff,
     syncReplaceOpenVscode,
+    syncReplaceRun,
     syncReplaceMenu,
     syncReplaceInteractive,
 } from './actions/sync-replace/sync-replace.ts'
@@ -299,6 +300,16 @@ export const getYargsParser = (argv: string[]): Argv =>
                     .command('review', 'review each tracked file and keep or undo', async () => syncReplaceReview())
                     .command('rediff', 'find and add new changes from tracked repos', async () => syncReplaceRediff())
                     .command('vscode', 'open all tracked repos in VS Code', async () => syncReplaceOpenVscode())
+                    .command(
+                        'run [cmd]',
+                        'run a command in all tracked repos',
+                        (yargs) =>
+                            yargs.positional('cmd', {
+                                type: 'string',
+                                describe: 'command to run in each tracked repo',
+                            }),
+                        async (args) => syncReplaceRun(args.cmd),
+                    )
                     .command('commit', 'commit all tracked files', async () => syncReplaceCommit())
                     .option('start', {
                         type: 'string',
@@ -342,6 +353,11 @@ export const getYargsParser = (argv: string[]): Argv =>
                         type: 'boolean',
                         alias: 'xe',
                         describe: 'keep the line matching end pattern (only replace content before it)',
+                    })
+                    .option('inline', {
+                        type: 'boolean',
+                        alias: 'i',
+                        describe: 'replace only the matched string, not the entire line',
                     }),
             async (args) => {
                 if (args.start) {
@@ -354,6 +370,7 @@ export const getYargsParser = (argv: string[]): Argv =>
                         args.repoType as 'all' | 'jvm' | 'node',
                         args.excludeStart ?? false,
                         args.excludeEnd ?? false,
+                        args.inline ?? false,
                     )
                 }
                 const choice = await syncReplaceMenu()
@@ -368,6 +385,8 @@ export const getYargsParser = (argv: string[]): Argv =>
                         return syncReplaceRediff()
                     case 'vscode':
                         return syncReplaceOpenVscode()
+                    case 'run':
+                        return syncReplaceRun()
                     case 'reset':
                         return syncReplaceReset()
                     case 'commit':
