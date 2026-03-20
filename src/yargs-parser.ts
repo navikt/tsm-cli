@@ -51,6 +51,7 @@ import { updateDistroless } from './actions/repos/distroless/distroless.ts'
 import { IDNUMBER_REGEX, searchRepos } from './actions/search/search.ts'
 import { addToIgnoreList, deleteFromIgnoreList, getIgnoreList } from './actions/search/ignore-list.ts'
 import { getAllVulns } from './actions/vulns/vulns.ts'
+import { convertKcatToKafkaCtl } from './actions/kafka/config-convert.ts'
 
 export const getYargsParser = (argv: string[]): Argv =>
     yargs(hideBin(argv))
@@ -684,6 +685,24 @@ export const getYargsParser = (argv: string[]): Argv =>
                         (yargs) => yargs,
                         async () => {
                             await cleanup()
+                        },
+                    )
+                    .command(
+                        'convert [kcat-file]',
+                        'convert kcat output form nais kafka command',
+                        (yargs) =>
+                            yargs.positional('kcat-file', {
+                                type: 'string',
+                                describe: 'full path to the output kcat file from nais kafka credentials',
+                            }),
+                        async ({ kcatFile }) => {
+                            if (!kcatFile) {
+                                logError(
+                                    `\nPlease provide the path to the kcat file, e.g. tsm kafka convert /path/to/kcat.config\n`,
+                                )
+                                process.exit(1)
+                            }
+                            await convertKcatToKafkaCtl(kcatFile)
                         },
                     ),
             () => {
