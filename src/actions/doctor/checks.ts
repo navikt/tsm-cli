@@ -1,4 +1,4 @@
-import { $, ShellPromise } from 'bun'
+import { $ } from 'bun'
 
 export async function checkGithubCli(): Promise<string | null> {
     const res = await $`gh auth status`.quiet()
@@ -55,7 +55,7 @@ export async function checkPatTokenMvn(): Promise<string | null> {
     return null
 }
 
-export async function defaultExistsCheck(what: string, command: ShellPromise): Promise<string | null> {
+export async function defaultExistsCheck(what: string, command: $.ShellPromise): Promise<string | null> {
     const res = await command.quiet()
 
     if (res.exitCode === 0) {
