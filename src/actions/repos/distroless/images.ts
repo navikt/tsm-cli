@@ -1,6 +1,6 @@
 import { $ } from 'bun'
 
-export const distrolessBumpTypes = ['java21', 'node24'] as const
+export const distrolessBumpTypes = ['java21', 'java25', 'node24'] as const
 
 export type DistrolessBumpTypes = (typeof distrolessBumpTypes)[number]
 
@@ -26,6 +26,8 @@ function typeToImage(type: DistrolessBumpTypes): string {
     switch (type) {
         case 'java21':
             return 'gcr.io/distroless/java21-debian12'
+        case 'java25':
+            return 'gcr.io/distroless/java25-debian13'
         case 'node24':
             return 'gcr.io/distroless/nodejs24-debian12'
     }
