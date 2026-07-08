@@ -29,6 +29,6 @@ function typeToImage(type: DistrolessBumpTypes): string {
         case 'java25':
             return 'gcr.io/distroless/java25-debian13'
         case 'node24':
-            return 'gcr.io/distroless/nodejs24-debian12'
+            return 'gcr.io/distroless/nodejs24-debian13'
     }
 }
