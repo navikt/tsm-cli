@@ -4,6 +4,7 @@ import * as R from 'remeda'
 
 import { getTeam } from '../common/config.ts'
 import { coloredTimestamp } from '../common/date-utils.ts'
+import { authorToColorAvatar } from '../common/format-utils.ts'
 import { log } from '../common/log.ts'
 import { BaseRepoNodeFragment, ghGqlQuery, OrgTeamRepoResult, removeIgnoredAndArchived } from '../common/octokit.ts'
 
@@ -23,6 +24,10 @@ type BranchRefNode = {
     defaultBranchRef: {
         target: {
             message: string
+            author: {
+                avatarUrl: string
+                user: { login: string }
+            }
             checkSuites: {
                 nodes: CheckSuite[]
             }
@@ -41,6 +46,12 @@ const reposQuery = /* GraphQL */ `
                             target {
                                 ... on Commit {
                                     message
+                                    author {
+                                        avatarUrl
+                                        user {
+                                            login
+                                        }
+                                    }
                                     checkSuites(last: 1) {
                                         nodes {
                                             status
@@ -66,11 +77,19 @@ const reposQuery = /* GraphQL */ `
     ${BaseRepoNodeFragment}
 `
 
-async function getRepositories(
+async function getLastCommitsByRepo(
     team: string,
     order: 'asc' | 'desc',
     limit: number | undefined,
-): Promise<{ name: string; lastPush: Date; commit: string; action: CheckSuite }[]> {
+): Promise<
+    {
+        name: string
+        lastPush: Date
+        commit: string
+        author: { avatarUrl: string; user: { login: string } }
+        action: CheckSuite | undefined
+    }[]
+> {
     log(chalk.green(`Getting ${limit == null ? 'all' : limit} repositories in order ${order} for team ${team}`))
 
     const queryResult = await ghGqlQuery<OrgTeamRepoResult<BranchRefNode>>(reposQuery, {
@@ -86,6 +105,7 @@ async function getRepositories(
             name: repo.name,
             lastPush: parseISO(repo.pushedAt),
             commit: repo.defaultBranchRef.target.message,
+            author: repo.defaultBranchRef.target.author,
             action: repo.defaultBranchRef.target.checkSuites.nodes[0],
         })),
         R.take(limit ?? Infinity),
@@ -96,7 +116,11 @@ async function getRepositories(
     return repos
 }
 
-function coloredStatus(action: CheckSuite): string {
+function coloredStatus(action: CheckSuite | undefined): string {
+    if (action == null) {
+        return chalk.gray('NO ACTIONS')
+    }
+
     if (action.workflowRun == null) {
         // Was likely skipped
         return chalk.gray('SKIPPED')
@@ -114,15 +138,15 @@ function coloredStatus(action: CheckSuite): string {
 }
 
 export async function lastCommits(order: 'asc' | 'desc', limit: number | undefined): Promise<void> {
-    const lastCommits = await getRepositories(await getTeam(), order, limit)
+    const lastCommits = await getLastCommitsByRepo(await getTeam(), order, limit)
 
     log(
         lastCommits
             .map(
                 (it) =>
-                    `${`${coloredStatus(it.action)}: `.padEnd(21, ' ')}${coloredTimestamp(it.lastPush)} ${it.name}: ${
+                    `${authorToColorAvatar(it.author.user.login)} ${`${coloredStatus(it.action)}: `.padEnd(21, ' ')}${coloredTimestamp(it.lastPush)} ${it.name}: ${
                         it.commit.split('\n')[0]
-                    } (${it.action.workflowRun?.event ?? 'none'})`,
+                    } (${it.action?.workflowRun?.event ?? 'none'}) - ${it.author.user.login}`,
             )
             .join('\n'),
     )
