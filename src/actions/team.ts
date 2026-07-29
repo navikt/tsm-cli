@@ -1,10 +1,10 @@
-import * as R from 'remeda'
 import chalk from 'chalk'
+import * as R from 'remeda'
 
-import { ghGqlQuery, OrgTeamResult } from '../common/octokit.ts'
-import { log } from '../common/log.ts'
-import { authorToColorAvatar } from '../common/format-utils.ts'
 import { getTeam } from '../common/config.ts'
+import { authorToColorAvatar } from '../common/format-utils.ts'
+import { log } from '../common/log.ts'
+import { ghGqlQuery, OrgTeamResult } from '../common/octokit.ts'
 
 type MemberNodes = {
     members: {

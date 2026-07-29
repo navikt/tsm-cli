@@ -1,7 +1,7 @@
 import chalk from 'chalk'
 
-import { log, logError } from '../common/log.ts'
 import { Author, createCoAuthorsText, promptForCoAuthors } from '../common/authors.ts'
+import { log, logError } from '../common/log.ts'
 
 export async function coAuthors(message: string | undefined, amend: boolean | undefined): Promise<void> {
     if (message == null && amend == null) {

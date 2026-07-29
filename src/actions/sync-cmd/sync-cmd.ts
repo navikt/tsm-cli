@@ -1,15 +1,15 @@
+import { checkbox, confirm, input } from '@inquirer/prompts'
+import { $ } from 'bun'
 import chalk from 'chalk'
 import * as R from 'remeda'
-import { $ } from 'bun'
 import { PushResult } from 'simple-git'
-import { checkbox, confirm, input } from '@inquirer/prompts'
 
-import { getAllRepos } from '../../common/repos.ts'
+import { GIT_CACHE_DIR } from '../../common/cache.ts'
 import { getTeam } from '../../common/config.ts'
 import { getUpdatedGitterCache, Gitter } from '../../common/git.ts'
-import { BaseRepoNode } from '../../common/octokit.ts'
 import { log } from '../../common/log.ts'
-import { GIT_CACHE_DIR } from '../../common/cache.ts'
+import { BaseRepoNode } from '../../common/octokit.ts'
+import { getAllRepos } from '../../common/repos.ts'
 
 export async function syncCmd(query: string | undefined, cmd: string | undefined, force: boolean): Promise<void> {
     if (query == null) {

@@ -1,9 +1,9 @@
-import * as R from 'remeda'
 import chalk from 'chalk'
+import * as R from 'remeda'
 
-import { BaseRepoNode, ghGqlQuery, OrgTeamRepoResult } from '../../common/octokit.ts'
 import { getTeam } from '../../common/config.ts'
 import { log } from '../../common/log.ts'
+import { BaseRepoNode, ghGqlQuery, OrgTeamRepoResult } from '../../common/octokit.ts'
 
 const allVulnerabilitiesForTeamQuery = /* GraphQL */ `
     query OurRepos($team: String!) {

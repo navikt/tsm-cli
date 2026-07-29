@@ -1,13 +1,12 @@
-import * as path from 'node:path'
+import chalk from 'chalk'
 import * as fs from 'node:fs'
-
+import * as path from 'node:path'
 import * as R from 'remeda'
 import { parse } from 'semver'
-import chalk from 'chalk'
 
 import packageJson from '../../tsm-cli/package.json'
-import { log, logError } from '../common/log.ts'
 import { CACHE_DIR } from '../common/cache.ts'
+import { log, logError } from '../common/log.ts'
 import { getOctokitClient } from '../common/octokit.ts'
 
 export async function hasNewVersion(): Promise<string | null> {
@@ -42,7 +41,7 @@ export async function updateToNewestVersion(): Promise<void> {
         const updateSub = Bun.spawnSync('npm i -g @navikt/teamsykmelding-cli'.split(' '))
         if (updateSub.exitCode === 0) {
             log(chalk.green(`Updated to version ${newVersion}!`))
-            reportChangesSinceLast(packageJson.version)
+            await reportChangesSinceLast(packageJson.version)
         } else {
             log(chalk.bgWhite.red(`Could not update to version ${newVersion}.`))
             log(chalk.red(updateSub.stderr.toString()))
@@ -67,7 +66,7 @@ export async function reportChangesSinceLast(existingVersion: string | null): Pr
     })
 
     if (response.status !== 200) {
-        logError(`Unable to fetch latest commits from github: ${response.status}`)
+        logError(`Unable to fetch latest commits from github: ${response.status as string}`)
         return
     }
 

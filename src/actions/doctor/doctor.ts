@@ -1,19 +1,18 @@
-import * as R from 'remeda'
 import chalk from 'chalk'
-import { $ } from 'bun'
+import * as R from 'remeda'
 
 import { log } from '../../common/log.ts'
 
-import { checkGithubCli, checkKubectl, checkPatTokenMvn, checkPatTokenNpm, defaultExistsCheck } from './checks.ts'
-import { REQUIRED_ACTIONS } from './config.ts'
-import { missingClis } from './clis.ts'
 import { badBrews } from './brew.ts'
+import { checkGithubCli, checkKubectl, checkPatTokenMvn, checkPatTokenNpm, defaultExistsCheck } from './checks.ts'
+import { missingClis } from './clis.ts'
+import { REQUIRED_ACTIONS } from './config.ts'
 
 const CHECKS = {
     gh: checkGithubCli,
     kubectl: checkKubectl,
-    nais: () => defaultExistsCheck('nais', $`nais --version`),
-    gcloud: () => defaultExistsCheck('gcloud', $`gcloud --version`),
+    nais: () => defaultExistsCheck('nais', `nais --version`),
+    gcloud: () => defaultExistsCheck('gcloud', `gcloud --version`),
     'PAT token (npm)': checkPatTokenNpm,
     'PAT token (mvn)': checkPatTokenMvn,
 } satisfies Record<(typeof REQUIRED_ACTIONS)[number], () => Promise<string | null>>

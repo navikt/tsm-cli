@@ -1,7 +1,6 @@
-import path from 'node:path'
-
-import chalk from 'chalk'
 import { checkbox } from '@inquirer/prompts'
+import chalk from 'chalk'
+import path from 'node:path'
 
 import { CACHE_DIR } from './cache.ts'
 import { log } from './log.ts'

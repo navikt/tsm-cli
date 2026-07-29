@@ -1,11 +1,10 @@
-import path from 'node:path'
-import fs from 'node:fs'
-
 import chalk from 'chalk'
+import fs from 'node:fs'
+import path from 'node:path'
 
 import { CACHE_DIR } from './cache.ts'
-import { log } from './log.ts'
 import { updateTeamsCache } from './cache/team.ts'
+import { log } from './log.ts'
 
 export const CONFIG_DIR = path.join(Bun.env.HOME ?? '~', '.config', 'tsm')
 

@@ -1,14 +1,13 @@
-import path from 'node:path'
-
-import * as R from 'remeda'
 import chalk from 'chalk'
+import path from 'node:path'
+import * as R from 'remeda'
 
 import { CONFIG_DIR } from '../common/config.ts'
-import { log } from '../common/log.ts'
 import { IS_DEV } from '../common/env.ts'
+import { log } from '../common/log.ts'
 
-import { Usage, UserCommandUsage } from './types.ts'
 import { applyDiff } from './diff.ts'
+import { Usage, UserCommandUsage } from './types.ts'
 
 export async function showUsageAnalytics(detailed: boolean): Promise<void> {
     const { usage, user } = await loadGlobalAnalytics()

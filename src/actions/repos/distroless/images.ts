@@ -16,6 +16,7 @@ export async function getLatestDigestHash(type: DistrolessBumpTypes): Promise<{ 
     }
 
     if (digest == null) {
+        // oxlint-disable-next-line typescript/no-base-to-string
         throw new Error(`No manifest found: ${process.stderr?.toString() ?? 'No error'}`)
     }
 

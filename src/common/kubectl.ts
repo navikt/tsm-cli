@@ -1,6 +1,6 @@
+import { search } from '@inquirer/prompts'
 import { $ } from 'bun'
 import chalk from 'chalk'
-import { search } from '@inquirer/prompts'
 
 import { log } from './log.ts'
 

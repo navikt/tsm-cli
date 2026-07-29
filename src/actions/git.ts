@@ -2,6 +2,7 @@
 
 import chalk from 'chalk'
 
+import { getTeam } from '../common/config.ts'
 import { Gitter } from '../common/git.ts'
 import { log, logProgressDot } from '../common/log.ts'
 import {
@@ -11,7 +12,6 @@ import {
     OrgTeamRepoResult,
     removeIgnoredAndArchived,
 } from '../common/octokit.ts'
-import { getTeam } from '../common/config.ts'
 
 const reposQuery = /* GraphQL */ `
     query ($team: String!) {

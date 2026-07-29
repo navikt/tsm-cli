@@ -1,17 +1,16 @@
+import { checkbox, confirm, editor, input, select } from '@inquirer/prompts'
+import { $ } from 'bun'
+import chalk from 'chalk'
 import path from 'node:path'
 import { createInterface, emitKeypressEvents } from 'node:readline'
-
-import chalk from 'chalk'
-import { $ } from 'bun'
 import { PushResult } from 'simple-git'
-import { checkbox, confirm, editor, input, select } from '@inquirer/prompts'
 
-import { getAllRepos } from '../../common/repos.ts'
-import { getTeam } from '../../common/config.ts'
-import { BaseRepoNode } from '../../common/octokit.ts'
-import { log } from '../../common/log.ts'
 import { CACHE_DIR, GIT_CACHE_DIR } from '../../common/cache.ts'
+import { getTeam } from '../../common/config.ts'
 import { getUpdatedGitterCache, Gitter } from '../../common/git.ts'
+import { log } from '../../common/log.ts'
+import { BaseRepoNode } from '../../common/octokit.ts'
+import { getAllRepos } from '../../common/repos.ts'
 
 const SYNC_REPLACE_STATE_FILE = path.join(CACHE_DIR, 'sync-replace-state.json')
 const SYNC_REPLACE_HISTORY_FILE = path.join(CACHE_DIR, 'sync-replace-history.json')
@@ -401,7 +400,7 @@ export async function syncReplaceRun(cmd?: string): Promise<void> {
 
     const renderRepo = (index: number): void => {
         const name = repoNames[index]
-        const s = statuses.get(name)!
+        const s = statuses.get(name)
         let text: string
         switch (s) {
             case 'pending':
@@ -416,6 +415,8 @@ export async function syncReplaceRun(cmd?: string): Promise<void> {
             case 'failed':
                 text = `  ${chalk.red('✗')} ${name}`
                 break
+            default:
+                text = chalk.gray(`  ○ ${name}`)
         }
         writeLine(N - index + 2, text)
     }
@@ -464,8 +465,8 @@ export async function syncReplaceRun(cmd?: string): Promise<void> {
     const queue = [...repoNames]
     const workers = Array.from({ length: Math.min(concurrency, queue.length) }, async () => {
         while (queue.length > 0) {
-            const repo = queue.shift()!
-            await runOne(repo)
+            const repo = queue.shift()
+            if (repo) await runOne(repo)
         }
     })
     await Promise.all(workers)
@@ -1038,7 +1039,7 @@ export async function syncReplace(
                     if (!approvedMatchesByFile.has(change.file)) {
                         approvedMatchesByFile.set(change.file, [])
                     }
-                    approvedMatchesByFile.get(change.file)!.push(expandedMatch)
+                    approvedMatchesByFile.get(change.file)?.push(expandedMatch)
                     extraLines = result.newExtraLines
                     log(chalk.green('Approved'))
                 } else {

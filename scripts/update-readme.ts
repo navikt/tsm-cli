@@ -1,3 +1,5 @@
+// oxlint-disable no-console
+
 import { getYargsParser } from '../src/yargs-parser'
 
 const availableCommands = await Promise.all(
@@ -19,4 +21,4 @@ ${availableCommands.map(([name, description]) => `* \`${name}\` - ${description}
 
 await Bun.write(readmeFile, originalFileContent.replace(readmeMarkersRegex, newContent))
 
-console.log('Updated README.md with --help output')
+console.info('Updated README.md with --help output')

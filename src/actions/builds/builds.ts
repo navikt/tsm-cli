@@ -1,12 +1,12 @@
-import chalk from 'chalk'
-import * as R from 'remeda'
-import { parseISO } from 'date-fns'
 import { $ } from 'bun'
+import chalk from 'chalk'
+import { parseISO } from 'date-fns'
+import * as R from 'remeda'
 
-import { log, logNoNewLine } from '../../common/log.ts'
-import { BaseRepoNodeFragment, ghGqlQuery, OrgTeamRepoResult, removeIgnoredAndArchived } from '../../common/octokit.ts'
 import { getTeam } from '../../common/config.ts'
 import { coloredTimestamp } from '../../common/date-utils.ts'
+import { log, logNoNewLine } from '../../common/log.ts'
+import { BaseRepoNodeFragment, ghGqlQuery, OrgTeamRepoResult, removeIgnoredAndArchived } from '../../common/octokit.ts'
 
 type CheckSuite = {
     status: string
@@ -144,7 +144,7 @@ export async function checkBuilds(rerunFailed: boolean): Promise<void> {
                         .throws(true)
                     log(chalk.green(` OK!`))
                 } catch (e) {
-                    log(chalk.red(` Unable to rerun :( cause ${e}`))
+                    log(chalk.red(` Unable to rerun :( cause ${e as Error}`))
                 }
             }
         }

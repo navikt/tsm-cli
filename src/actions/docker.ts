@@ -1,13 +1,12 @@
-import path from 'node:path'
-
-import * as R from 'remeda'
 import chalk from 'chalk'
+import path from 'node:path'
+import * as R from 'remeda'
 
-import { getUpdatedGitterCache } from '../common/git.ts'
-import { getAllRepos } from '../common/repos.ts'
-import { getTeam } from '../common/config.ts'
 import { GIT_CACHE_DIR } from '../common/cache.ts'
+import { getTeam } from '../common/config.ts'
+import { getUpdatedGitterCache } from '../common/git.ts'
 import { log } from '../common/log.ts'
+import { getAllRepos } from '../common/repos.ts'
 
 export async function dockerImages(): Promise<void> {
     const repos = await getAllRepos(await getTeam())

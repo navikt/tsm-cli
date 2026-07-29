@@ -55,12 +55,11 @@ export async function checkPatTokenMvn(): Promise<string | null> {
     return null
 }
 
-export async function defaultExistsCheck(what: string, command: $.ShellPromise): Promise<string | null> {
-    const res = await command.quiet()
-
-    if (res.exitCode === 0) {
+export async function defaultExistsCheck(what: string, command: string): Promise<string | null> {
+    try {
+        await $`${{ raw: command }}`.quiet()
         return null
-    } else {
+    } catch {
         return `${what} is not configured correctly. Please run '${command}' to see what is wrong.`
     }
 }

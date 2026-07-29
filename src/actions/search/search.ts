@@ -3,10 +3,10 @@ import chalk from 'chalk'
 import { formatDistanceToNowStrict, parseISO } from 'date-fns'
 
 import { getTeam } from '../../common/config.ts'
-import { getAllRepos, getRepo } from '../../common/repos.ts'
+import { Gitter, getUpdatedGitterCache } from '../../common/git.ts'
 import { logError, log, logNoNewLine } from '../../common/log.ts'
 import { BaseRepoNode } from '../../common/octokit.ts'
-import { Gitter, getUpdatedGitterCache } from '../../common/git.ts'
+import { getAllRepos, getRepo } from '../../common/repos.ts'
 
 import { getIgnoreList } from './ignore-list.ts'
 

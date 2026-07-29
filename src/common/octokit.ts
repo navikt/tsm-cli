@@ -1,5 +1,5 @@
-import { Octokit } from 'octokit'
 import chalk from 'chalk'
+import { Octokit } from 'octokit'
 import * as R from 'remeda'
 
 import { log } from './log.ts'

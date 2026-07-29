@@ -1,35 +1,32 @@
-import fs from 'node:fs'
-
-import yargs, { Argv } from 'yargs'
-import { hideBin } from 'yargs/helpers'
 import chalk from 'chalk'
 import { differenceInDays, isValid, parseISO, startOfWeek, sub } from 'date-fns'
 import { nb } from 'date-fns/locale'
+import fs from 'node:fs'
+import yargs, { Argv } from 'yargs'
+import { hideBin } from 'yargs/helpers'
 
-import { runDoctor } from './actions/doctor/doctor.ts'
 import { auth } from './actions/auth.ts'
-import { lastCommits } from './actions/last-commits.ts'
-import { openPrs } from './actions/prs.ts'
-import { queryForRelevantRepos } from './actions/repo-query.ts'
-import { getRepos } from './actions/repos/repos.ts'
-import { getConfig, updateConfig } from './common/config.ts'
-import { log, logError } from './common/log.ts'
-import { pullAllRepositories } from './actions/git.ts'
-import { displayMembers } from './actions/team.ts'
-import { syncFileAcrossRepos } from './actions/sync-file.ts'
-import { getRepoMainBranch } from './actions/repo-metadata.ts'
+import { checkBuilds } from './actions/builds/builds.ts'
 import { coAuthors } from './actions/co-authors.ts'
-import { reportChangesSinceLast, updateToNewestVersion } from './updater/self-updater.ts'
-import { open } from './actions/open.ts'
-import { openResource } from './actions/web.ts'
-import { cleanup, kafkaConfig } from './actions/kafka/kafka.ts'
-import { azure } from './actions/azure.ts'
-import { updateAnalytics } from './analytics'
-import { showUsageAnalytics } from './analytics/analytics-global.ts'
-import { createSimpleSykmelding } from './actions/mock'
-import { displayCommitsForPeriod } from './actions/work/work.ts'
+import { dockerImages } from './actions/docker.ts'
+import { runDoctor } from './actions/doctor/doctor.ts'
 import { openRepoWeb } from './actions/gh.ts'
+import { pullAllRepositories } from './actions/git.ts'
+import { convertKcatToKafkaCtl } from './actions/kafka/config-convert.ts'
+import { cleanup, kafkaConfig } from './actions/kafka/kafka.ts'
+import { lastCommits } from './actions/last-commits.ts'
+import { createSimpleSykmelding } from './actions/mock'
+import { open } from './actions/open.ts'
+import { openPrs } from './actions/prs.ts'
+import { getRepoMainBranch } from './actions/repo-metadata.ts'
+import { queryForRelevantRepos } from './actions/repo-query.ts'
+import { updateDistroless } from './actions/repos/distroless/distroless.ts'
+import { getRepos } from './actions/repos/repos.ts'
+import { syncRepoSettings } from './actions/repos/settings/sync.ts'
+import { addToIgnoreList, deleteFromIgnoreList, getIgnoreList } from './actions/search/ignore-list.ts'
+import { IDNUMBER_REGEX, searchRepos } from './actions/search/search.ts'
 import { syncCmd } from './actions/sync-cmd/sync-cmd.ts'
+import { syncFileAcrossRepos } from './actions/sync-file.ts'
 import {
     syncReplace,
     syncReplaceReset,
@@ -42,16 +39,15 @@ import {
     syncReplaceMenu,
     syncReplaceInteractive,
 } from './actions/sync-replace/sync-replace.ts'
-import { syncRepoSettings } from './actions/repos/settings/sync.ts'
-import { checkBuilds } from './actions/builds/builds.ts'
-import { liveBuildDashboard } from './actions/builds/live/build-dashboard.tsx'
-import { dockerImages } from './actions/docker.ts'
-import { getSecret } from './actions/secret/secret.ts'
-import { updateDistroless } from './actions/repos/distroless/distroless.ts'
-import { IDNUMBER_REGEX, searchRepos } from './actions/search/search.ts'
-import { addToIgnoreList, deleteFromIgnoreList, getIgnoreList } from './actions/search/ignore-list.ts'
+import { displayMembers } from './actions/team.ts'
 import { getAllVulns } from './actions/vulns/vulns.ts'
-import { convertKcatToKafkaCtl } from './actions/kafka/config-convert.ts'
+import { openResource } from './actions/web.ts'
+import { displayCommitsForPeriod } from './actions/work/work.ts'
+import { updateAnalytics } from './analytics'
+import { showUsageAnalytics } from './analytics/analytics-global.ts'
+import { getConfig, updateConfig } from './common/config.ts'
+import { log, logError } from './common/log.ts'
+import { reportChangesSinceLast, updateToNewestVersion } from './updater/self-updater.ts'
 
 export const getYargsParser = (argv: string[]): Argv =>
     yargs(hideBin(argv))
@@ -144,21 +140,12 @@ export const getYargsParser = (argv: string[]): Argv =>
             'builds',
             'checks all repos for failing builds (on main)',
             (yargs) =>
-                yargs
-                    .option('rerun-failed', {
-                        type: 'boolean',
-                        demandOption: false,
-                        default: false,
-                    })
-                    .option('live', {
-                        type: 'boolean',
-                        demandOption: false,
-                    }),
+                yargs.option('rerun-failed', {
+                    type: 'boolean',
+                    demandOption: false,
+                    default: false,
+                }),
             async (args) => {
-                if (args.live) {
-                    await liveBuildDashboard()
-                    return
-                }
                 await checkBuilds(args.rerunFailed)
             },
         )
@@ -651,17 +638,6 @@ export const getYargsParser = (argv: string[]): Argv =>
             },
         )
         .command(
-            'secret [secret]',
-            'get secret',
-            (yargs) =>
-                yargs.positional('secret', {
-                    type: 'string',
-                    description: 'name of secret to get',
-                    default: null,
-                }),
-            async (args) => getSecret(args.secret ?? null),
-        )
-        .command(
             'kafka',
             'kafka cli for kafka stuff',
             (yargs) =>
@@ -711,38 +687,6 @@ export const getYargsParser = (argv: string[]): Argv =>
             },
         )
         .command(
-            'azure',
-            'azure cli for azure stuff',
-            (yargs) =>
-                yargs.command(
-                    'token [scope] [app]',
-                    'get token for azure app for scope',
-                    (yargs) =>
-                        yargs
-                            .positional('scope', {
-                                type: 'string',
-                                describe: 'scope',
-                            })
-                            .positional('app', {
-                                type: 'string',
-                                default: null,
-                                describe: 'app name',
-                            }),
-                    async (args) => {
-                        if (args.scope != null) {
-                            await azure(args.app, args.scope)
-                        } else {
-                            logError(`\n${args.env} is not a valid env, use one of: dev, demo, prod\n`)
-                            process.exit(1)
-                        }
-                    },
-                ),
-            () => {
-                log('Use one of the following commands: ')
-                log('\ttsm azure token "scope" "app-name"')
-            },
-        )
-        .command(
             'docker',
             'docker stuff',
             (yargs) =>
@@ -762,5 +706,5 @@ export const getYargsParser = (argv: string[]): Argv =>
                 return
             }
 
-            updateAnalytics(command, args)
+            void updateAnalytics(command, args)
         })

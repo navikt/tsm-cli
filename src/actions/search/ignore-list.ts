@@ -1,10 +1,9 @@
+import chalk from 'chalk'
 import path from 'node:path'
 
-import chalk from 'chalk'
-
-import { log } from '../../common/log.ts'
-import { getConfig, updateConfig } from '../../common/config.ts'
 import { CACHE_DIR } from '../../common/cache.ts'
+import { getConfig, updateConfig } from '../../common/config.ts'
+import { log } from '../../common/log.ts'
 
 export async function getIgnoreList(search: string): Promise<string[]> {
     const config = await getConfig()
@@ -13,7 +12,7 @@ export async function getIgnoreList(search: string): Promise<string[]> {
     if (!ignoreList) return []
     const ignoreFile = Bun.file(path.join(CACHE_DIR, ignoreList))
     if (!(await ignoreFile.exists())) {
-        log(chalk.red(`File ${ignoreFile} does not exist, removing`))
+        log(chalk.red(`File ${ignoreFile.name} does not exist, removing`))
         delete config.searchIgnoreLists[search]
         await updateConfig(config)
         return []

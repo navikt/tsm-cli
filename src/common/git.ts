@@ -1,8 +1,7 @@
+import chalk from 'chalk'
 import fs from 'node:fs'
 import path from 'node:path'
-
 import simpleGit, { CleanOptions, ResetMode, SimpleGit } from 'simple-git'
-import chalk from 'chalk'
 
 import { GIT_CACHE_DIR } from './cache.ts'
 import { log, logError, logProgressDot } from './log.ts'
@@ -56,9 +55,9 @@ export class Gitter {
                 await repoClient.fetch(['--all']) // Fetch all branches
                 await repoClient.checkout(defaultBranch)
             } catch (error) {
-                logError(`Unable to fetch for ${repo} (branch: ${defaultBranch}), cause: ${error}`)
+                logError(`Unable to fetch for ${repo} (branch: ${defaultBranch}), cause: ${error as Error}`)
                 logError('Nuking repo and trying to clone again')
-                fs.rmdirSync(path.join(GIT_CACHE_DIR, repo), { recursive: true })
+                fs.rmSync(path.join(GIT_CACHE_DIR, repo), { recursive: true, force: true })
                 return this.clone(repo, silent, false)
             }
 
@@ -70,7 +69,7 @@ export class Gitter {
                         '--rebase': null,
                     })
             } catch (error) {
-                logError(`Unable to pull for ${repo} (branch: ${defaultBranch}), cause: ${error}`)
+                logError(`Unable to pull for ${repo} (branch: ${defaultBranch}), cause: ${error as Error}`)
             }
         } else {
             try {

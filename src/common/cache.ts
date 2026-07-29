@@ -1,5 +1,5 @@
-import path from 'node:path'
 import fs from 'node:fs'
+import path from 'node:path'
 
 export const CACHE_DIR = path.join(Bun.env.HOME ?? '~', '.cache', 'tsm')
 export const GIT_CACHE_DIR = path.join(CACHE_DIR, 'repos')

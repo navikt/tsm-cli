@@ -1,12 +1,12 @@
-import * as R from 'remeda'
-import { add, endOfDay, formatISO, startOfDay } from 'date-fns'
 import chalk from 'chalk'
+import { add, endOfDay, formatISO, startOfDay } from 'date-fns'
+import * as R from 'remeda'
 
-import { BaseRepoNodeFragment, ghGqlQuery, OrgTeamRepoResult, removeIgnoredAndArchived } from '../../common/octokit.ts'
-import { log } from '../../common/log.ts'
+import { getTeam } from '../../common/config.ts'
 import { humanDay } from '../../common/date-utils.ts'
 import { authorToColorAvatar } from '../../common/format-utils.ts'
-import { getTeam } from '../../common/config.ts'
+import { log } from '../../common/log.ts'
+import { BaseRepoNodeFragment, ghGqlQuery, OrgTeamRepoResult, removeIgnoredAndArchived } from '../../common/octokit.ts'
 
 type CommitsInRangeNode = {
     defaultBranchRef: {

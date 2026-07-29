@@ -1,8 +1,8 @@
 import chalk from 'chalk'
 
 import packageJson from '../../../tsm-cli/package.json'
-import { log } from '../../common/log.ts'
 import { subtractDays } from '../../common/date-utils.ts'
+import { log } from '../../common/log.ts'
 
 export async function createSimpleSykmelding(fnr: string): Promise<void> {
     log(chalk.blue(`Creating simple sykmelding for ${chalk.yellow(fnr)}...`))

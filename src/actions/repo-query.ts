@@ -1,12 +1,12 @@
-import * as R from 'remeda'
-import chalk from 'chalk'
 import { $ } from 'bun'
+import chalk from 'chalk'
+import * as R from 'remeda'
 
+import { GIT_CACHE_DIR } from '../common/cache.ts'
+import { getTeam } from '../common/config.ts'
 import { getUpdatedGitterCache } from '../common/git.ts'
 import { log } from '../common/log.ts'
-import { GIT_CACHE_DIR } from '../common/cache.ts'
 import { getAllRepos } from '../common/repos.ts'
-import { getTeam } from '../common/config.ts'
 
 async function queryRepo(query: string, repo: string): Promise<boolean> {
     const result = await $`${{ raw: query }}`.cwd(`${GIT_CACHE_DIR}/${repo}`).quiet().throws(false)

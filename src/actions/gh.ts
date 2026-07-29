@@ -1,14 +1,13 @@
+import { search } from '@inquirer/prompts'
+import chalk from 'chalk'
 import path from 'node:path'
 
-import chalk from 'chalk'
-import { search } from '@inquirer/prompts'
-
 import { CACHE_DIR } from '../common/cache.ts'
-import { log, logError } from '../common/log.ts'
 import { getTeam } from '../common/config.ts'
+import { log, logError } from '../common/log.ts'
+import { BaseRepoNode } from '../common/octokit.ts'
 import { openUrl } from '../common/open-url.ts'
 import { getAllRepos } from '../common/repos.ts'
-import { BaseRepoNode } from '../common/octokit.ts'
 
 export async function openRepoWeb(initialTerm: string | null, noCache: true | undefined): Promise<void> {
     const repos = await getRepoNames(!noCache)
@@ -38,7 +37,7 @@ async function getRepoNames(cache: boolean = true): Promise<string[]> {
     const team = await getTeam()
     if (!cache) {
         return await getAllRepos(team).then((repos) => {
-            saveCachedRepos(repos)
+            void saveCachedRepos(repos)
 
             return repos.map((it) => it.name)
         })
@@ -51,14 +50,14 @@ async function getRepoNames(cache: boolean = true): Promise<string[]> {
 
     log(chalk.blueBright('No cached repos found, fetching and populating cache... Next time will be faster :-)'))
     return await getAllRepos(team).then((repos) => {
-        saveCachedRepos(repos)
+        void saveCachedRepos(repos)
 
         return repos.map((it) => it.name)
     })
 }
 
 function upgradeCacheInBackground(team: string): void {
-    getAllRepos(team).then((repos) => saveCachedRepos(repos))
+    void getAllRepos(team).then((repos) => saveCachedRepos(repos))
 }
 
 async function loadCachedRepos(): Promise<string[]> {

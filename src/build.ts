@@ -1,3 +1,5 @@
+// oxlint-disable no-console
+
 import chalk from 'chalk'
 
 import { version } from '../tsm-cli/package.json'
@@ -17,8 +19,8 @@ if (result.outputs.length > 1) {
 const [artifact] = result.outputs
 const outputWriter = Bun.file('./tsm-cli/bin/tsm').writer()
 
-outputWriter.write('#!/usr/bin/env bun\n')
-outputWriter.write(await artifact.text())
+await outputWriter.write('#!/usr/bin/env bun\n')
+await outputWriter.write(await artifact.text())
 
 Bun.spawnSync('chmod +x ./tsm-cli/bin/tsm'.split(' '), { stdout: 'inherit' })
 

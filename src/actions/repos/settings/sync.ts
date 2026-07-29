@@ -1,10 +1,10 @@
-import * as R from 'remeda'
 import chalk from 'chalk'
+import * as R from 'remeda'
 
-import { getAllRepos } from '../../../common/repos.ts'
 import { getTeam } from '../../../common/config.ts'
-import { getOctokitClient } from '../../../common/octokit.ts'
 import { log, logNoNewLine } from '../../../common/log.ts'
+import { getOctokitClient } from '../../../common/octokit.ts'
+import { getAllRepos } from '../../../common/repos.ts'
 
 const EXPECTED_REPO_SETTINGS = {
     default_branch: 'main',
@@ -34,7 +34,7 @@ export async function syncRepoSettings(): Promise<void> {
                 await applySettings(team, repo.name)
                 log(chalk.green(' OK!'))
             } catch (error) {
-                log(chalk.red(` FAILED! :( (why: ${error})`))
+                log(chalk.red(` FAILED! :( (why: ${error as Error})`))
             }
         }
 

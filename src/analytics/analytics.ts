@@ -2,8 +2,8 @@ import path from 'node:path'
 
 import { CACHE_DIR } from '../common/cache.ts'
 
-import { Usage, UserCommandUsage } from './types.ts'
 import { applyDiff } from './diff.ts'
+import { Usage, UserCommandUsage } from './types.ts'
 
 export async function updateAnalyticsCache(diff: Usage): Promise<void> {
     const cachedAnalytics = await loadCachedAnalytics()

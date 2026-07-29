@@ -1,15 +1,14 @@
-import path from 'node:path'
-
-import * as R from 'remeda'
-import chalk from 'chalk'
-import { PushResult } from 'simple-git'
 import { search, input, checkbox, confirm } from '@inquirer/prompts'
+import chalk from 'chalk'
+import path from 'node:path'
+import * as R from 'remeda'
+import { PushResult } from 'simple-git'
 
-import { BaseRepoNode } from '../common/octokit.ts'
-import { log } from '../common/log.ts'
-import { getUpdatedGitterCache, Gitter } from '../common/git.ts'
 import { GIT_CACHE_DIR } from '../common/cache.ts'
 import { getTeam } from '../common/config.ts'
+import { getUpdatedGitterCache, Gitter } from '../common/git.ts'
+import { log } from '../common/log.ts'
+import { BaseRepoNode } from '../common/octokit.ts'
 import { getAllRepos } from '../common/repos.ts'
 
 async function cloneAllRepos(): Promise<BaseRepoNode<unknown>[]> {

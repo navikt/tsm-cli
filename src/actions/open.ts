@@ -1,9 +1,8 @@
-import path from 'node:path'
-import fs from 'node:fs'
-import * as child_process from 'child_process'
-
-import chalk from 'chalk'
 import { search } from '@inquirer/prompts'
+import chalk from 'chalk'
+import * as child_process from 'child_process'
+import fs from 'node:fs'
+import path from 'node:path'
 
 import { getConfig } from '../common/config.ts'
 import { log, logError } from '../common/log.ts'

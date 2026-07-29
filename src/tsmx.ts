@@ -1,17 +1,17 @@
-import chalk from 'chalk'
 import { select } from '@inquirer/prompts'
+import chalk from 'chalk'
 
-import { log } from './common/log.ts'
+import { updateAnalytics } from './analytics'
 import { getTeamsCache } from './common/cache/team.ts'
 import { updateConfig } from './common/config.ts'
-import { updateAnalytics } from './analytics'
 import { changeContext } from './common/kubectl.ts'
+import { log } from './common/log.ts'
 
 /**
  * Interactive team-switcher
  */
 export async function tsmx(): Promise<void> {
-    updateAnalytics(['tsmx'])
+    void updateAnalytics(['tsmx'])
 
     const teams = await getTeamsCache()
 

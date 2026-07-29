@@ -1,12 +1,12 @@
-import * as R from 'remeda'
-import { parseISO } from 'date-fns'
 import chalk from 'chalk'
+import { parseISO } from 'date-fns'
+import * as R from 'remeda'
 
-import { BaseRepoNodeFragment, ghGqlQuery, OrgTeamRepoResult, removeIgnoredAndArchived } from '../common/octokit.ts'
-import { log } from '../common/log.ts'
+import { getTeam } from '../common/config.ts'
 import { coloredTimestamp } from '../common/date-utils.ts'
 import { authorToColorAvatar } from '../common/format-utils.ts'
-import { getTeam } from '../common/config.ts'
+import { log } from '../common/log.ts'
+import { BaseRepoNodeFragment, ghGqlQuery, OrgTeamRepoResult, removeIgnoredAndArchived } from '../common/octokit.ts'
 
 type PrNode = {
     title: string

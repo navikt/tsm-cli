@@ -1,14 +1,14 @@
-import chalk from 'chalk'
 import { semver } from 'bun'
+import chalk from 'chalk'
 
 import packageJson from '../tsm-cli/package.json'
 
-import { hasNewVersionCached } from './updater/self-updater.ts'
-import { log } from './common/log.ts'
-import { getYargsParser } from './yargs-parser.ts'
 import { isTeamConfigured } from './common/config.ts'
+import { log } from './common/log.ts'
 import { tsmx } from './tsmx.ts'
 import { checkForNewVersion } from './updater/self-checker.ts'
+import { hasNewVersionCached } from './updater/self-updater.ts'
+import { getYargsParser } from './yargs-parser.ts'
 
 if (Bun.argv.length >= 3 && Bun.argv[2].endsWith('tsmx')) {
     await tsmx()
@@ -21,7 +21,7 @@ if (
     !Bun.argv[1].includes('tsm-cli/bin')
 ) {
     // Only spawn a background version check all other args, or else we get a infinite loop of spawns
-    checkForNewVersion(true)
+    void checkForNewVersion(true)
 
     const isUpgradeCommand = Bun.argv.find((it) => it === 'upgrade') != null
     if (!isUpgradeCommand) {

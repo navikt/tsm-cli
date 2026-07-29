@@ -6,10 +6,13 @@ En liten verktøykasse for #team-sykmelding
 
 ### Oppsett
 
--   Du må ha [Node.js](https://nodejs.org/en/) installert, husk å bruk verktøy som nvm, mise eller asdf for å håndtere versjoner.
--   Du må ha [bun.sh](https://bun.sh) installert, dette kan installeres med curl (`curl -fsSL https://bun.sh/install | bash`)
+- Du må ha [Node.js](https://nodejs.org/en/) installert, husk å bruk verktøy som nvm, mise eller
+  asdf for å håndtere versjoner.
+- Du må ha [bun.sh](https://bun.sh) installert, dette kan installeres med curl
+  (`curl -fsSL https://bun.sh/install | bash`)
 
 #### Node med mise
+
 Om du installerte node med mise må du køyre desse kommandoane i kommandolinja for å aktivere det.
 
 ```
@@ -28,8 +31,9 @@ Du må ha en `.npmrc` fil på root i home-mappen din med følgende innhold:
 
 ### Tilgang
 
-Du må ha en PAT (Personal Access Token) for å kunne laste ned pakker fra Github Package Registry. Denne kan
-du lage [her](https://github.com/settings/tokens). Du må gi den `read:packages` scope, bruk PAT typen "classic"
+Du må ha en PAT (Personal Access Token) for å kunne laste ned pakker fra Github Package Registry.
+Denne kan du lage [her](https://github.com/settings/tokens). Du må gi den `read:packages` scope,
+bruk PAT typen "classic"
 
 Legg til denne i din `~/.bashrc` eller `~/.zshrc` fil:
 
@@ -75,14 +79,13 @@ Nå er du klar til å bruke `tsm`!
 * `web` - open web page
 * `gh` - open github repo in browser
 * `search` - search github repos for a given regex
-* `secret` - get secret
 * `kafka` - kafka cli for kafka stuff
-* `azure` - azure cli for azure stuff
 * `docker` - docker stuff
 
 <!-- COMPUTER SAYS DON'T TOUCH THIS END -->
 
-Du kan også bruke `tsmx` for å interaktivt bytte mellom team, dersom du har satt opp flere team med `tsm config --team=<team>`.
+Du kan også bruke `tsmx` for å interaktivt bytte mellom team, dersom du har satt opp flere team med
+`tsm config --team=<team>`.
 
 ### Eksempler på bruk:
 
@@ -124,7 +127,8 @@ tsm repos --query='cat .yarnrc.yml'
 
 ### Utvikling
 
-Dette kommandolinje-verktøyet er skrevet i TypeScript og bruker bun.sh. For å kjøre det må du først bygge det:
+Dette kommandolinje-verktøyet er skrevet i TypeScript og bruker bun.sh. For å kjøre det må du først
+bygge det:
 
 ```bash
 bun install

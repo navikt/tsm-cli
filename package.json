@@ -2,57 +2,46 @@
     "name": "teamsykmelding-cli",
     "type": "module",
     "scripts": {
-        "tsc": "bun x tsc",
-        "lint": "bun x eslint src/**/*.ts",
+        "tsc": "tsc",
+        "lint": "oxlint",
+        "lint:fix": "oxlint --fix",
+        "fmt": "oxfmt",
+        "fmt:check": "oxfmt --check",
         "lint-staged": "lint-staged",
         "build": "bun x rimraf tsm-cli/bin/tsm && bun run build-cli && bun run copy-html && bun run sanity-check",
         "build-cli": "bun run src/build.ts",
         "copy-html": "find src -name '*.html' -exec cp {} tsm-cli/bin \\;",
         "sanity-check": "./tsm-cli/bin/tsm config --team=tsm && ./tsm-cli/bin/tsm --help",
         "prepare": "husky",
-        "upgrade-interactive": "bunx npm-check-updates --format group -i",
-        "postinstall": "bun x prettier package.json --write && echo \"Prettiered package.json\""
+        "upgrade-interactive": "bun update --interactive"
     },
     "dependencies": {
-        "@inquirer/prompts": "^7.2.3",
+        "@inquirer/prompts": "^7.10.1",
         "@navikt/fnrvalidator": "^2.2.1",
         "@types/js-yaml": "^4.0.9",
         "chalk": "^5.6.2",
-        "date-fns": "^4.1.0",
-        "fs-extra": "^11.3.4",
-        "js-yaml": "^4.1.1",
-        "octokit": "^3.2.0",
-        "open": "^10.1.0",
-        "remeda": "^2.33.6",
-        "simple-git": "^3.33.0",
-        "yargs": "^17.7.2"
+        "date-fns": "^4.4.0",
+        "fs-extra": "^11.4.0",
+        "js-yaml": "^4.3.0",
+        "octokit": "^3.2.2",
+        "open": "^11.0.0",
+        "remeda": "^2.39.0",
+        "simple-git": "^3.36.0",
+        "yargs": "^18.1.0"
     },
     "devDependencies": {
-        "@navikt/eslint-config-teamsykmelding": "^7.1.0",
-        "@types/bun": "^1.3.11",
+        "@navikt/tsm-oxfmt": "^0.0.9",
+        "@navikt/tsm-oxlint": "^0.0.4",
+        "@types/bun": "^1.3.14",
         "@types/fs-extra": "^11.0.4",
         "@types/yargs": "^17.0.35",
-        "@typescript-eslint/eslint-plugin": "^8.57.1",
-        "eslint": "^8.54.0",
         "husky": "^9.1.7",
-        "lint-staged": "^15.4.3",
-        "prettier": "^3.8.1",
+        "lint-staged": "^17.2.0",
+        "oxfmt": "^0.61.0",
+        "oxlint": "^1.76.0",
+        "oxlint-tsgolint": "^7.0.2001",
         "rimraf": "^6.1.3",
-        "semver": "^7.7.4"
-    },
-    "peerDependencies": {
-        "typescript": "^5.0.0"
-    },
-    "prettier": "@navikt/eslint-config-teamsykmelding/prettier",
-    "eslintConfig": {
-        "extends": "@navikt/eslint-config-teamsykmelding",
-        "rules": {
-            "@typescript-eslint/no-unused-vars": [
-                "error",
-                {
-                    "ignoreRestSiblings": true
-                }
-            ]
-        }
+        "semver": "^7.8.5",
+        "typescript": "^7.0.2"
     }
 }

@@ -1,6 +1,6 @@
-import yaml from 'js-yaml'
 import chalk from 'chalk'
 import fs from 'fs-extra'
+import yaml from 'js-yaml'
 
 import { log } from '../../common/log.ts'
 

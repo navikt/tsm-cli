@@ -1,6 +1,6 @@
-import * as R from 'remeda'
-import chalk from 'chalk'
 import { search } from '@inquirer/prompts'
+import chalk from 'chalk'
+import * as R from 'remeda'
 
 import { log } from '../common/log.ts'
 import { openUrl } from '../common/open-url.ts'
@@ -32,7 +32,7 @@ const staticPages = {
 
 const availablePages = {
     ...staticPages,
-    ...{ ...(isKnowit ? knowitPages : {}) },
+    ...(isKnowit ? knowitPages : {}),
     ...hiddenPages,
 }
 

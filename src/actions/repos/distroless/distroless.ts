@@ -1,15 +1,14 @@
-import path from 'node:path'
-
-import * as R from 'remeda'
 import { confirm } from '@inquirer/prompts'
 import chalk from 'chalk'
+import path from 'node:path'
+import * as R from 'remeda'
 
-import { getAllRepos } from '../../../common/repos.ts'
+import { GIT_CACHE_DIR } from '../../../common/cache.ts'
 import { getTeam } from '../../../common/config.ts'
 import { getUpdatedGitterCache, Gitter } from '../../../common/git.ts'
-import { BaseRepoNode } from '../../../common/octokit.ts'
-import { GIT_CACHE_DIR } from '../../../common/cache.ts'
 import { log, logError } from '../../../common/log.ts'
+import { BaseRepoNode } from '../../../common/octokit.ts'
+import { getAllRepos } from '../../../common/repos.ts'
 
 import { DistrolessBumpTypes, distrolessBumpTypes, getLatestDigestHash } from './images.ts'
 

@@ -1,11 +1,12 @@
+import chalk from 'chalk'
 // TODO don't disable eslint? :D
 /* eslint-disable */
 import fs from 'fs-extra'
 
 import { CACHE_DIR } from '../../common/cache.ts'
-import { log } from '../../common/log.ts'
 import { getAllAppNames, promptForAppName } from '../../common/kubectl.ts'
-import chalk from 'chalk'
+import { log } from '../../common/log.ts'
+
 import { tryAddAddContextToKafkactl } from './kafkactl.ts'
 
 function saveSecretToPath(secretData: any, path: string): void {

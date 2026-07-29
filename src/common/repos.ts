@@ -1,5 +1,6 @@
 import chalk from 'chalk'
 
+import { log, logError } from './log.ts'
 import {
     BaseRepoNode,
     BaseRepoNodeFragment,
@@ -7,7 +8,6 @@ import {
     OrgTeamRepoResult,
     removeIgnoredAndArchived,
 } from './octokit.ts'
-import { log, logError } from './log.ts'
 
 const blacklist: string[] = ['vault-iac', 'omrade-helse-etterlevelse-topic']
 

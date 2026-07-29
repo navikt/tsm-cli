@@ -1,3 +1,5 @@
+// oxlint-disable typescript/restrict-template-expressions
+
 import * as R from 'remeda'
 
 import { Args, Command, CommandUsage, Usage, UserCommandUsage } from './types.ts'
