@@ -8,12 +8,12 @@
         "fmt": "oxfmt",
         "fmt:check": "oxfmt --check",
         "lint-staged": "lint-staged",
-        "build": "bun x rimraf tsm-cli/bin/tsm && bun run build-cli && bun run copy-html && bun run sanity-check",
+        "build": "bun x rimraf tsm-cli/bin/tsm && bun run build-cli && bun run sanity-check",
         "build-cli": "bun run src/build.ts",
-        "copy-html": "find src -name '*.html' -exec cp {} tsm-cli/bin \\;",
         "sanity-check": "./tsm-cli/bin/tsm config --team=tsm && ./tsm-cli/bin/tsm --help",
         "prepare": "husky",
-        "upgrade-interactive": "bun update --interactive"
+        "upgrade-interactive": "bun update --interactive",
+        "postinstall": "bun run fmt package.json && echo \"oxfmted package.json\""
     },
     "dependencies": {
         "@inquirer/prompts": "^7.10.1",
