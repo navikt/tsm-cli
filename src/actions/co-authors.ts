@@ -1,82 +1,72 @@
+import * as clack from '@clack/prompts'
 import chalk from 'chalk'
 
 import { Author, createCoAuthorsText, promptForCoAuthors } from '../common/authors.ts'
-import { log, logError } from '../common/log.ts'
+import { tuiSession } from '../common/tui.ts'
+
+type GitResult = { output: string } | { error: string }
 
 export async function coAuthors(message: string | undefined, amend: boolean | undefined): Promise<void> {
-    if (message == null && amend == null) {
-        logError(chalk.red('You must provide a message (-m) or --amend'))
-        process.exit(1)
-    }
-
-    if (message != null) {
-        await newCommitWithCoAuthors(message)
-        return
-    }
-
-    if (amend) {
-        await amendCommitWithCoauthors()
-        return
-    }
-
-    logError(chalk.red('Illegal state: You must provide a message (-m) or --amend'))
-    process.exit(1)
+    await tuiSession(chalk.bgCyan(chalk.black(' tsm mob ')), async () => {
+        if (message != null) {
+            await newCommitWithCoAuthors(message)
+        } else if (amend) {
+            await amendCommitWithCoauthors()
+        } else {
+            clack.log.error('You must provide a message (-m) or --amend')
+            process.exitCode = 1
+        }
+    })
 }
 
 async function newCommitWithCoAuthors(message: string): Promise<void> {
-    log(`Creating new commit with message "${message}", who is co-authoring this?\n`)
+    clack.log.info(`Creating new commit with message "${chalk.yellow(message)}"`)
 
     const authors = await promptForCoAuthors()
-    const result = commitWithMessage(message, authors)
-
-    if ('output' in result) {
-        log(chalk.green("Commit created, don't forget to push!"))
-    } else {
-        logError(chalk.red('Unable to create commit: '))
-        logError(result.error)
+    if (authors == null) {
+        clack.log.warn('Aborting, no commit was created')
+        return
     }
+
+    report(commitWithMessage(message, authors), "Commit created, don't forget to push!")
 }
 
 async function amendCommitWithCoauthors(): Promise<void> {
     const existingCommit = Bun.spawnSync(['git', 'log', '-1']).stdout.toString().trim()
 
-    log(`${chalk.green('Amending the following commit with Co-Authors:')}\n`)
-    log(chalk.yellow(existingCommit))
-    log(chalk.cyan.bold('\nOnly the first line of this commit will be kept!!!\n'))
-    log(chalk.green('Who is co-authoring this?\n'))
+    clack.note(existingCommit, 'Amending this commit with co-authors')
+    clack.log.warn('Only the first line of this commit will be kept!')
 
     const authors = await promptForCoAuthors()
-    const result = amendWithAuthors(authors)
+    if (authors == null) {
+        clack.log.warn('Aborting, the commit was not amended')
+        return
+    }
+
+    report(amendWithAuthors(authors), "Commit amended, don't forget to push with --force-with-lease (gpf)!")
+}
+
+function report(result: GitResult, successMessage: string): void {
     if ('output' in result) {
-        log(chalk.green("Commit amended, don't forget to push with --force-with-lease (gpf)!"))
+        clack.log.success(successMessage)
     } else {
-        logError(chalk.red('Unable to create commit: '))
-        logError(result.error)
+        clack.log.error(`Unable to create commit:\n${chalk.gray(result.error.trim())}`)
+        process.exitCode = 1
     }
 }
 
-function commitWithMessage(message: string, authors: Author[]): { output: string } | { error: string } {
-    const command = ['git', 'commit', '-m', message, '-m', createCoAuthorsText(authors)]
-
-    const res = Bun.spawnSync(command)
-    const stdout = res.stdout.toString()
-    const stderr = res.stderr.toString()
-
-    if (res.exitCode !== 0) {
-        return { error: stderr }
-    } else {
-        return { output: stdout }
-    }
+function commitWithMessage(message: string, authors: Author[]): GitResult {
+    return runGit(['git', 'commit', '-m', message, '-m', createCoAuthorsText(authors)])
 }
 
-function amendWithAuthors(authors: Author[]): { output: string } | { error: string } {
+function amendWithAuthors(authors: Author[]): GitResult {
     const existingMessageFirstLine = Bun.spawnSync(['git', 'log', '-1', '--pretty=%B'])
         .stdout.toString()
         .trim()
         .split('\n')[0]
         .trim()
 
-    const command = [
+    return runGit([
         'git',
         'commit',
         '--amend',
@@ -85,15 +75,15 @@ function amendWithAuthors(authors: Author[]): { output: string } | { error: stri
         existingMessageFirstLine,
         '-m',
         createCoAuthorsText(authors),
-    ]
+    ])
+}
 
+function runGit(command: string[]): GitResult {
     const res = Bun.spawnSync(command)
-    const stdout = res.stdout.toString()
-    const stderr = res.stderr.toString()
 
     if (res.exitCode !== 0) {
-        return { error: stderr }
-    } else {
-        return { output: stdout }
+        return { error: res.stderr.toString() }
     }
+
+    return { output: res.stdout.toString() }
 }

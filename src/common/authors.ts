@@ -1,9 +1,7 @@
-import { checkbox } from '@inquirer/prompts'
-import chalk from 'chalk'
+import * as clack from '@clack/prompts'
 import path from 'node:path'
 
 import { CACHE_DIR } from './cache.ts'
-import { log } from './log.ts'
 
 export type Author = [name: string, email: string, user: string]
 
@@ -19,26 +17,31 @@ const authorOptions: Author[] = [
     ['Erik Haug', 'erik.haug@nav.no', 'erikhaugnav'],
 ]
 
-export async function promptForCoAuthors(): Promise<Author[]> {
+/**
+ * Prompts for co-authors, pre-selecting whoever was used last time. Returns null if the user
+ * cancels the prompt.
+ */
+export async function promptForCoAuthors(): Promise<Author[] | null> {
     const previouslyUsedCoAuthors = await getCachedCoAuthors()
     const bonusCoAuthors = await getBonusCoAuthors()
     const combinedAuthorOptions = [...authorOptions, ...bonusCoAuthors]
 
-    const selectedAuthors: Author[] = await checkbox({
+    const selectable = combinedAuthorOptions.filter(([, , user]) => Bun.env.USER !== user)
+
+    const selectedAuthors = await clack.multiselect({
         message: 'Select co-authors',
-        choices: combinedAuthorOptions
-            .filter(([, , user]) => Bun.env.USER !== user)
-            .map(([name, email, user]) => ({
-                name: `${name.split(' ')[0]}`,
-                value: [name, email, user] satisfies Author,
-                checked: previouslyUsedCoAuthors?.find((prev) => name === prev[0]) != null,
-            })),
-        pageSize: 15,
+        options: selectable.map(([name, email, user]) => ({
+            value: [name, email, user] satisfies Author,
+            label: name,
+        })),
+        initialValues: selectable.filter(([name]) =>
+            previouslyUsedCoAuthors.some((prev) => name === prev[0]),
+        ) as Author[],
+        required: true,
     })
 
-    if (selectedAuthors.length === 0) {
-        log(chalk.red('You must select at least one co-author'))
-        return promptForCoAuthors()
+    if (clack.isCancel(selectedAuthors)) {
+        return null
     }
 
     await cacheCoAuthors(selectedAuthors)
