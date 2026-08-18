@@ -16,6 +16,7 @@
         "postinstall": "bun run fmt package.json && echo \"oxfmted package.json\""
     },
     "dependencies": {
+        "@clack/prompts": "^1.7.0",
         "@inquirer/prompts": "^7.10.1",
         "@navikt/fnrvalidator": "^2.2.1",
         "@types/js-yaml": "^4.0.9",
