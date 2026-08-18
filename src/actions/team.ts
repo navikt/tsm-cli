@@ -1,10 +1,10 @@
+import * as clack from '@clack/prompts'
 import chalk from 'chalk'
-import * as R from 'remeda'
 
 import { getTeam } from '../common/config.ts'
 import { authorToColorAvatar } from '../common/format-utils.ts'
-import { log } from '../common/log.ts'
 import { ghGqlQuery, OrgTeamResult } from '../common/octokit.ts'
+import { tuiSession, withSpinner } from '../common/tui.ts'
 
 type MemberNodes = {
     members: {
@@ -32,30 +32,42 @@ const reposQuery = /* GraphQL */ `
     }
 `
 
+type Member = MemberNodes['members']['nodes'][number]
+
 export async function displayMembers(name: string | null): Promise<void> {
-    const team = name ?? (await getTeam())
+    await tuiSession(chalk.bgCyan(chalk.black(' tsm team ')), async () => {
+        const team = name ?? (await getTeam())
 
-    log(chalk.green(`Getting team members for team ${team}`))
+        const members = await withSpinner(
+            `Getting team members for ${chalk.yellow(team)}`,
+            async () => {
+                const queryResult = await ghGqlQuery<OrgTeamResult<MemberNodes>>(reposQuery, { team })
 
-    const queryResult = await ghGqlQuery<OrgTeamResult<MemberNodes>>(reposQuery, { team })
+                return queryResult.organization.team?.members.nodes ?? null
+            },
+            (members) =>
+                members == null
+                    ? `Could not find team ${chalk.red(team)}`
+                    : `Found ${chalk.yellow(members.length)} members in ${chalk.yellow(team)}`,
+        )
 
-    if (queryResult.organization.team == null) {
-        log(`${chalk.red(`\nCould not find team "${team}"`)}\n\nAre you sure you provided the correct team name?`)
-        process.exit(1)
-    }
+        if (members == null) {
+            clack.log.error(`Could not find team "${team}". Are you sure you provided the correct team name?`)
+            process.exitCode = 1
+            return
+        }
 
-    const members = queryResult.organization.team.members.nodes
+        if (members.length === 0) {
+            clack.log.warn(`${team} has no members`)
+            return
+        }
 
-    log(`Found ${chalk.greenBright(members.length)} members in team ${team}!`)
+        clack.log.message(members.map(toMemberLine).join('\n'))
+    })
+}
 
-    R.pipe(
-        members,
-        R.forEach((it) => {
-            log(
-                `  ${authorToColorAvatar(it.login)} ${
-                    it.name ? `${it.name} (${chalk.greenBright(it.login)})` : chalk.greenBright(it.login)
-                } - ${chalk.blueBright(`https://github.com/${it.login}`)}`,
-            )
-        }),
-    )
+function toMemberLine(member: Member): string {
+    const who = member.name ? `${member.name} (${chalk.greenBright(member.login)})` : chalk.greenBright(member.login)
+
+    return `  ${authorToColorAvatar(member.login)} ${who} - ${chalk.blueBright(`https://github.com/${member.login}`)}`
 }

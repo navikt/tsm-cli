@@ -64,7 +64,6 @@ Nå er du klar til å bruke `tsm`!
 * `builds` - checks all repos for failing builds (on main)
 * `git` - keep our repos in sync, ex: tsm git sync
 * `work` - see what has happened the last week (or more)
-* `mock` - do stuff with the mock
 * `team` - get all team members
 * `sync-file` - sync a file across specified repos
 * `sync-cmd` - execute a command across multiple repos and stage and commit the changes

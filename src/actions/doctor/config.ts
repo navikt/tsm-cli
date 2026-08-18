@@ -6,9 +6,9 @@ export const Config = ['java', 'npm', 'yarn', 'node']
 /**
  * Baseline CLIs that are expected to be on PATH
  */
-export const REQUIRED_CLIS = ['gh', 'kubectl', 'nais', 'gcloud'] as const
+export const REQUIRED_CLIS = ['gh', 'kubectl', 'nais', 'gcloud', 'mise'] as const
 
 /**
  * CLIs and additional actions that are expected to have dedicated checks
  */
-export const REQUIRED_ACTIONS = [...REQUIRED_CLIS, 'PAT token (npm)', 'PAT token (mvn)'] as const
+export const REQUIRED_ACTIONS = [...REQUIRED_CLIS, 'PAT token (npm)'] as const

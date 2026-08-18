@@ -1,3 +1,4 @@
+import * as clack from '@clack/prompts'
 import chalk from 'chalk'
 import { parseISO } from 'date-fns'
 import * as R from 'remeda'
@@ -5,8 +6,8 @@ import * as R from 'remeda'
 import { getTeam } from '../common/config.ts'
 import { coloredTimestamp } from '../common/date-utils.ts'
 import { authorToColorAvatar } from '../common/format-utils.ts'
-import { log } from '../common/log.ts'
 import { BaseRepoNodeFragment, ghGqlQuery, OrgTeamRepoResult, removeIgnoredAndArchived } from '../common/octokit.ts'
+import { tuiSession, withSpinner } from '../common/tui.ts'
 
 type PrNode = {
     title: string
@@ -57,53 +58,62 @@ async function getPrs(
     team: string,
     opts: { includeDrafts: boolean; noBot: boolean },
 ): Promise<Record<string, PrNode[]>> {
-    log(
-        chalk.green(
-            `Getting all open prs for team ${team}${opts.includeDrafts ? ' (including drafts)' : ''}${
-                opts.noBot ? ' (without bots)' : ''
-            }`,
-        ),
+    const filters = [opts.includeDrafts ? 'including drafts' : null, opts.noBot ? 'without bots' : null].filter(
+        (it) => it != null,
     )
 
-    const queryResult = await ghGqlQuery<OrgTeamRepoResult<PullRequestNode>>(reposQuery, { team })
+    return await withSpinner(
+        `Getting all open PRs for ${chalk.yellow(team)}${filters.length > 0 ? ` (${filters.join(', ')})` : ''}`,
+        async () => {
+            const queryResult = await ghGqlQuery<OrgTeamRepoResult<PullRequestNode>>(reposQuery, { team })
 
-    const openPrs = R.pipe(
-        queryResult.organization.team.repositories.nodes,
-        removeIgnoredAndArchived,
-        R.flatMap((repo) =>
-            R.pipe(
-                repo.pullRequests.nodes,
-                R.map((pr): [string, PrNode] => [repo.name, pr]),
-                R.sortBy(([, pr]) => pr.updatedAt),
-                R.filter(([, pr]) => opts.includeDrafts || !pr.isDraft),
-                R.filter(([, pr]) => !opts.noBot || !pr.author.login.includes('dependabot')),
-            ),
-        ),
-        R.groupBy(([repo]) => repo),
-        R.mapValues((value) => value.map((it) => it[1])),
+            return R.pipe(
+                queryResult.organization.team.repositories.nodes,
+                removeIgnoredAndArchived,
+                R.flatMap((repo) =>
+                    R.pipe(
+                        repo.pullRequests.nodes,
+                        R.map((pr): [string, PrNode] => [repo.name, pr]),
+                        R.sortBy(([, pr]) => pr.updatedAt),
+                        R.filter(([, pr]) => opts.includeDrafts || !pr.isDraft),
+                        R.filter(([, pr]) => !opts.noBot || !pr.author.login.includes('dependabot')),
+                    ),
+                ),
+                R.groupBy(([repo]) => repo),
+                R.mapValues((value) => value.map((it) => it[1])),
+            )
+        },
+        (openPrs) =>
+            `Found ${chalk.yellow(Object.values(openPrs).flat().length)} open PRs in ${chalk.yellow(
+                Object.keys(openPrs).length,
+            )} repos`,
     )
-
-    log(`Found ${chalk.greenBright(Object.values(openPrs).flat().length)} open prs for team ${team}\n`)
-
-    return openPrs
 }
 
 export async function openPrs(includeDrafts: boolean, noBot: boolean): Promise<void> {
-    const openPrs = await getPrs(await getTeam(), { includeDrafts, noBot })
+    await tuiSession(chalk.bgCyan(chalk.black(' tsm prs ')), async () => {
+        const prsByRepo = await getPrs(await getTeam(), { includeDrafts, noBot })
 
-    R.pipe(
-        openPrs,
-        R.entries(),
-        R.sortBy([([, prs]) => R.first(prs)?.updatedAt ?? '', 'desc']),
-        R.forEach(([repo, prs]) => {
-            log(chalk.greenBright(repo))
-            prs.forEach((pr) => {
-                log(
-                    `\t${pr.title} (${pr.permalink})\n\tBy ${authorToColorAvatar(pr.author.login)} ${
-                        pr.author.login
-                    } ${coloredTimestamp(parseISO(pr.updatedAt))} ago${pr.isDraft ? ' (draft)' : ''}`,
-                )
-            })
-        }),
+        const repos = R.pipe(prsByRepo, R.entries(), R.sortBy([([, prs]) => R.first(prs)?.updatedAt ?? '', 'desc']))
+
+        if (repos.length === 0) {
+            clack.log.success('No open PRs')
+            return
+        }
+
+        clack.note(
+            repos.map(([repo, prs]) => `${chalk.green(repo)}\n${prs.map(toPrLine).join('\n')}`).join('\n\n'),
+            `${Object.values(prsByRepo).flat().length} open PRs`,
+        )
+    })
+}
+
+function toPrLine(pr: PrNode): string {
+    const draft = pr.isDraft ? chalk.gray(' (draft)') : ''
+
+    return (
+        `  ${pr.title}${draft}\n` +
+        `  ${authorToColorAvatar(pr.author.login)} ${pr.author.login} ${coloredTimestamp(parseISO(pr.updatedAt))} ago ` +
+        chalk.gray(pr.permalink)
     )
 }

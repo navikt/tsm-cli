@@ -1,10 +1,11 @@
+import * as clack from '@clack/prompts'
 import chalk from 'chalk'
 import * as R from 'remeda'
 
-import { log } from '../../common/log.ts'
+import { tuiSession, withSpinner } from '../../common/tui.ts'
 
 import { badBrews } from './brew.ts'
-import { checkGithubCli, checkKubectl, checkPatTokenMvn, checkPatTokenNpm, defaultExistsCheck } from './checks.ts'
+import { checkGithubCli, checkKubectl, checkPatTokenNpm, defaultExistsCheck } from './checks.ts'
 import { missingClis } from './clis.ts'
 import { REQUIRED_ACTIONS } from './config.ts'
 
@@ -13,53 +14,59 @@ const CHECKS = {
     kubectl: checkKubectl,
     nais: () => defaultExistsCheck('nais', `nais --version`),
     gcloud: () => defaultExistsCheck('gcloud', `gcloud --version`),
+    mise: () => defaultExistsCheck('mise', `mise --version`),
     'PAT token (npm)': checkPatTokenNpm,
-    'PAT token (mvn)': checkPatTokenMvn,
 } satisfies Record<(typeof REQUIRED_ACTIONS)[number], () => Promise<string | null>>
 
 export async function runDoctor(): Promise<void> {
-    log(chalk.blueBright('Verifying your setup...'))
-    const missing = missingClis()
-    if (missing.length > 0) {
-        log(
-            `The following CLIs are missing:\n`,
-            chalk.red(missing.map((it) => ` - ${chalk.bold(it)}`)),
-            '\n\nPlease install all missing tools and try again. :)',
-        )
-        return
-    }
+    await tuiSession(chalk.bgCyan(chalk.black(' tsm doctor ')), async () => {
+        const missing = missingClis()
+        if (missing.length > 0) {
+            clack.log.error(
+                `The following CLIs are missing:\n${missing.map((it) => `  - ${chalk.bold(it)}`).join('\n')}`,
+            )
+            clack.log.info('Please install all missing tools and try again. :)')
+            return
+        }
 
-    const { okChecks, failedChecks } = await applyChecks()
-    if (okChecks.length) {
-        log(chalk.green(`The following checks are good!`))
-        log(chalk.red(okChecks.map((cli) => ` ${chalk.green('✓')} ${chalk.white(cli)}`).join('\n')))
-    }
-
-    const badBrew = await badBrews()
-    if (badBrew.length) {
-        log(`\nThe following CLIs are installed with ${chalk.red('brew')} and shouldn't be:`)
-        log(
-            chalk.red(
-                badBrew
-                    .filter((it) => it != null)
-                    .map((it) => ` - ${chalk.bold(it)}`)
-                    .join('\n'),
-            ),
+        const { okChecks, failedChecks } = await withSpinner(
+            `Verifying your setup (${Object.keys(CHECKS).length} checks)`,
+            () => applyChecks(),
+            ({ okChecks, failedChecks }) =>
+                failedChecks.length === 0
+                    ? `All ${chalk.green(okChecks.length)} checks passed`
+                    : `${chalk.green(okChecks.length)} checks passed, ${chalk.red(failedChecks.length)} failed`,
         )
-    }
 
-    if (failedChecks.length) {
-        log(`\nThe following check was not happy:`)
-        log(
-            chalk.red(
-                failedChecks
-                    .map(([cli, checkResult]) => ` - ${chalk.bold(cli)}: ${chalk.yellow(checkResult)}`)
-                    .join('\n'),
-            ),
+        const badBrew = await withSpinner(
+            'Looking for tools installed with brew',
+            () => badBrews(),
+            (bad) =>
+                bad.length === 0
+                    ? 'No tools are wrongly installed with brew'
+                    : `${chalk.red(bad.length)} tools are installed with brew`,
         )
-    } else {
-        log(chalk.green(`\nEverything is OK`))
-    }
+
+        if (okChecks.length > 0) {
+            clack.note(okChecks.map((cli) => `${chalk.green('✓')} ${cli}`).join('\n'), 'These checks are good')
+        }
+
+        if (badBrew.length > 0) {
+            clack.log.warn(
+                `The following CLIs are installed with ${chalk.red('brew')} and shouldn't be:\n` +
+                    badBrew.map((it) => `  - ${chalk.bold(it)}`).join('\n'),
+            )
+        }
+
+        if (failedChecks.length > 0) {
+            clack.log.error(
+                `The following checks were not happy:\n` +
+                    failedChecks.map(([cli, result]) => `  - ${chalk.bold(cli)}: ${chalk.yellow(result)}`).join('\n'),
+            )
+        } else if (badBrew.length === 0) {
+            clack.log.success('Everything is OK')
+        }
+    })
 }
 
 async function applyChecks(): Promise<{

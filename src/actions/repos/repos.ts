@@ -1,3 +1,4 @@
+import * as clack from '@clack/prompts'
 import chalk from 'chalk'
 import { parseISO } from 'date-fns'
 import * as R from 'remeda'
@@ -5,7 +6,6 @@ import * as R from 'remeda'
 import { withReposCache } from '../../common/cache/repos-cache.ts'
 import { getTeam } from '../../common/config.ts'
 import { coloredTimestamp } from '../../common/date-utils.ts'
-import { log } from '../../common/log.ts'
 import {
     BaseRepoNode,
     BaseRepoNodeFragment,
@@ -13,6 +13,7 @@ import {
     OrgTeamRepoResult,
     removeIgnoredAndArchived,
 } from '../../common/octokit.ts'
+import { tuiSession, withSpinner } from '../../common/tui.ts'
 
 type ExtraPropsOnRepo = {
     primaryLanguage: {
@@ -42,39 +43,47 @@ const reposQuery = /* GraphQL */ `
 `
 
 export async function getRepos(): Promise<void> {
-    const team = await getTeam()
+    await tuiSession(chalk.bgCyan(chalk.black(' tsm repos ')), async () => {
+        const team = await getTeam()
 
-    const nodes = await withReposCache<BaseRepoNode<ExtraPropsOnRepo>>(
-        `with-lang-${team}`,
-        `all repositories for team ${team}`,
-        async () => {
-            const queryResult = await ghGqlQuery<OrgTeamRepoResult<ExtraPropsOnRepo>>(reposQuery, {
-                team,
-            })
+        const nodes = await withSpinner(
+            `Fetching repos for ${chalk.yellow(team)}`,
+            () =>
+                withReposCache<BaseRepoNode<ExtraPropsOnRepo>>(
+                    `with-lang-${team}`,
+                    `all repositories for team ${team}`,
+                    async () => {
+                        const queryResult = await ghGqlQuery<OrgTeamRepoResult<ExtraPropsOnRepo>>(reposQuery, {
+                            team,
+                        })
 
-            return queryResult.organization.team.repositories.nodes
-        },
-    )
-
-    log(`\nFound ${chalk.green(removeIgnoredAndArchived(nodes).length)} repos:\n`)
-
-    const reposByLang = R.pipe(
-        nodes,
-        removeIgnoredAndArchived,
-        R.groupBy((it) => it.primaryLanguage?.name ?? 'unknown'),
-        R.mapValues(R.sortBy([(it) => it.pushedAt, 'asc'])),
-        R.entries(),
-        R.sortBy(([, [firstNode]]) => firstNode.pushedAt),
-    )
-
-    reposByLang.forEach(([lang, repos]) => {
-        log(chalk.hex(repos[0].primaryLanguage?.color ?? '#FFFFF')(`${lang}:`))
-        log(
-            R.pipe(
-                repos,
-                R.map((it) => ` - ${it.name} ${coloredTimestamp(parseISO(it.pushedAt))} ago - ${it.url}`),
-                R.join('\n'),
-            ),
+                        return queryResult.organization.team.repositories.nodes
+                    },
+                ),
+            (nodes) => `Found ${chalk.yellow(removeIgnoredAndArchived(nodes).length)} repos in ${chalk.yellow(team)}`,
         )
+
+        const reposByLang = R.pipe(
+            nodes,
+            removeIgnoredAndArchived,
+            R.groupBy((it) => it.primaryLanguage?.name ?? 'unknown'),
+            R.mapValues(R.sortBy([(it) => it.pushedAt, 'asc'])),
+            R.entries(),
+            R.sortBy(([, [firstNode]]) => firstNode.pushedAt),
+        )
+
+        if (reposByLang.length === 0) {
+            clack.log.warn(`No repos found for ${team}`)
+            return
+        }
+
+        clack.note(reposByLang.map(toLanguageSection).join('\n\n'), `Repos in ${team}`)
     })
+}
+
+function toLanguageSection([lang, repos]: [string, BaseRepoNode<ExtraPropsOnRepo>[]]): string {
+    const header = chalk.hex(repos[0].primaryLanguage?.color ?? '#FFFFFF')(`${lang} (${repos.length})`)
+    const lines = repos.map((it) => `  ${it.name} ${coloredTimestamp(parseISO(it.pushedAt))} ago ${chalk.gray(it.url)}`)
+
+    return [header, ...lines].join('\n')
 }

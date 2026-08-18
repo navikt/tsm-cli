@@ -16,7 +16,6 @@ import { convertKcatToKafkaCtl } from './actions/kafka/config-convert.ts'
 import { cleanup, kafkaConfig } from './actions/kafka/kafka.ts'
 import { ktor } from './actions/ktor/ktor.ts'
 import { lastCommits } from './actions/last-commits.ts'
-import { createSimpleSykmelding } from './actions/mock'
 import { open } from './actions/open.ts'
 import { openPrs } from './actions/prs.ts'
 import { getRepoMainBranch } from './actions/repo-metadata.ts'
@@ -214,36 +213,6 @@ export const getYargsParser = (argv: string[]): Argv =>
 
                     return displayCommitsForPeriod(fom, days, args.unknown ?? false, args.author ?? null)
                 }
-            },
-        )
-        .command(
-            'mock',
-            'do stuff with the mock',
-            (yargs) =>
-                yargs.command(
-                    'simple-sykmelding',
-                    'create a basic 100% sykmelding',
-                    (yargs) =>
-                        yargs.positional('fnr', {
-                            type: 'string',
-                            demandOption: true,
-                        }),
-                    async (args) => {
-                        if (args.fnr == null) {
-                            log(
-                                `${chalk.red('Fnr required, run: ')}${chalk.yellow(
-                                    'tsm mock simple-sykmelding fnr=<fnr>',
-                                )}`,
-                            )
-                            process.exit(1)
-                        }
-
-                        await createSimpleSykmelding(args.fnr)
-                    },
-                ),
-            () => {
-                log('Use one of the following commands:')
-                log('\ttsm mock simple-sykmelding fnr=<fnr>')
             },
         )
         .command(

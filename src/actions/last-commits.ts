@@ -1,3 +1,4 @@
+import * as clack from '@clack/prompts'
 import chalk from 'chalk'
 import { parseISO } from 'date-fns'
 import * as R from 'remeda'
@@ -5,8 +6,8 @@ import * as R from 'remeda'
 import { getTeam } from '../common/config.ts'
 import { coloredTimestamp } from '../common/date-utils.ts'
 import { authorToColorAvatar } from '../common/format-utils.ts'
-import { log } from '../common/log.ts'
 import { BaseRepoNodeFragment, ghGqlQuery, OrgTeamRepoResult, removeIgnoredAndArchived } from '../common/octokit.ts'
+import { tuiSession, withSpinner } from '../common/tui.ts'
 
 type CheckSuite = {
     status: string
@@ -77,43 +78,43 @@ const reposQuery = /* GraphQL */ `
     ${BaseRepoNodeFragment}
 `
 
+type RepoCommit = {
+    name: string
+    lastPush: Date
+    commit: string
+    author: { avatarUrl: string; user: { login: string } }
+    action: CheckSuite | undefined
+}
+
 async function getLastCommitsByRepo(
     team: string,
     order: 'asc' | 'desc',
     limit: number | undefined,
-): Promise<
-    {
-        name: string
-        lastPush: Date
-        commit: string
-        author: { avatarUrl: string; user: { login: string } }
-        action: CheckSuite | undefined
-    }[]
-> {
-    log(chalk.green(`Getting ${limit == null ? 'all' : limit} repositories in order ${order} for team ${team}`))
+): Promise<RepoCommit[]> {
+    return await withSpinner(
+        `Getting ${limit == null ? 'all' : limit} repos in order ${order} for ${chalk.yellow(team)}`,
+        async () => {
+            const queryResult = await ghGqlQuery<OrgTeamRepoResult<BranchRefNode>>(reposQuery, {
+                team,
+                order: order.toUpperCase(),
+                limit: limit,
+            })
 
-    const queryResult = await ghGqlQuery<OrgTeamRepoResult<BranchRefNode>>(reposQuery, {
-        team,
-        order: order.toUpperCase(),
-        limit: limit,
-    })
-
-    const repos = R.pipe(
-        queryResult.organization.team.repositories.nodes,
-        removeIgnoredAndArchived,
-        R.map((repo) => ({
-            name: repo.name,
-            lastPush: parseISO(repo.pushedAt),
-            commit: repo.defaultBranchRef.target.message,
-            author: repo.defaultBranchRef.target.author,
-            action: repo.defaultBranchRef.target.checkSuites.nodes[0],
-        })),
-        R.take(limit ?? Infinity),
+            return R.pipe(
+                queryResult.organization.team.repositories.nodes,
+                removeIgnoredAndArchived,
+                R.map((repo) => ({
+                    name: repo.name,
+                    lastPush: parseISO(repo.pushedAt),
+                    commit: repo.defaultBranchRef.target.message,
+                    author: repo.defaultBranchRef.target.author,
+                    action: repo.defaultBranchRef.target.checkSuites.nodes[0],
+                })),
+                R.take(limit ?? Infinity),
+            )
+        },
+        (repos) => `Got ${chalk.yellow(repos.length)} repos for ${chalk.yellow(team)}`,
     )
-
-    log(`Got ${chalk.greenBright(repos.length)} repositories for team ${team}`)
-
-    return repos
 }
 
 function coloredStatus(action: CheckSuite | undefined): string {
@@ -138,16 +139,26 @@ function coloredStatus(action: CheckSuite | undefined): string {
 }
 
 export async function lastCommits(order: 'asc' | 'desc', limit: number | undefined): Promise<void> {
-    const lastCommits = await getLastCommitsByRepo(await getTeam(), order, limit)
+    await tuiSession(chalk.bgCyan(chalk.black(' tsm commits ')), async () => {
+        const commits = await getLastCommitsByRepo(await getTeam(), order, limit)
 
-    log(
-        lastCommits
-            .map(
-                (it) =>
-                    `${authorToColorAvatar(it.author.user.login)} ${`${coloredStatus(it.action)}: `.padEnd(21, ' ')}${coloredTimestamp(it.lastPush)} ${it.name}: ${
-                        it.commit.split('\n')[0]
-                    } (${it.action?.workflowRun?.event ?? 'none'}) - ${it.author.user.login}`,
-            )
-            .join('\n'),
+        if (commits.length === 0) {
+            clack.log.warn('No repos found')
+            return
+        }
+
+        clack.log.message(commits.map(toCommitLine).join('\n'))
+    })
+}
+
+function toCommitLine(it: RepoCommit): string {
+    const subject = it.commit.split('\n')[0]
+    const event = it.action?.workflowRun?.event ?? 'none'
+
+    return (
+        `${authorToColorAvatar(it.author.user.login)} ` +
+        `${`${coloredStatus(it.action)}: `.padEnd(21, ' ')}` +
+        `${coloredTimestamp(it.lastPush)} ${chalk.blue(it.name)}: ${subject} ` +
+        chalk.gray(`(${event}) - ${it.author.user.login}`)
     )
 }
