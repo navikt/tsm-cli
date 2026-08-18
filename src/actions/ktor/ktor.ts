@@ -9,6 +9,7 @@ import { tuiSession, withSpinner } from '../../common/tui.ts'
 import { gradleBuild } from './gradle.ts'
 import {
     EXPECTED_VERSION_VARIABLE,
+    getKtorLibsRepo,
     getKtorRepo,
     getLatestTsmKtorVersion,
     KtorRepo,
@@ -55,7 +56,46 @@ export async function ktor(update: boolean): Promise<void> {
     })
 }
 
+/**
+ * Assumes versions and sanity checks from `tsm ktor` are OK, and only reports which tsm-ktor
+ * library modules each app refers to through the `tsmKtorLibs` version catalog.
+ */
+export async function ktorInfo(): Promise<void> {
+    await tuiSession(chalk.bgCyan(chalk.black(' tsm ktor info ')), async () => {
+        const repos = await updateRepoCache(getGitterCache())
+
+        const withLibs = await withSpinner(
+            'Looking for tsmKtorLibs usage',
+            async () => (await Promise.all(repos.map((repo) => getKtorLibsRepo(repo.name)))).filter((it) => it != null),
+            (hits) => `Found ${chalk.yellow(hits.length)} repos using tsmKtorLibs`,
+        )
+
+        if (withLibs.length === 0) {
+            clack.log.warn('No repos use tsmKtorLibs')
+            return
+        }
+
+        clack.note(
+            withLibs
+                .sort((a, b) => a.name.localeCompare(b.name))
+                .map((it) => [chalk.white(it.name), ...it.libs.map((lib) => `  ${chalk.gray('•')} ${lib}`)].join('\n'))
+                .join('\n\n'),
+            'tsm-ktor modules in use',
+        )
+    })
+}
+
 async function findKtorRepos(gitter: Gitter): Promise<KtorRepo[]> {
+    const repos = await updateRepoCache(gitter)
+
+    return await withSpinner(
+        'Looking for no.nav.tsm:ktor',
+        async () => (await Promise.all(repos.map((repo) => getKtorRepo(repo.name)))).filter((it) => it != null),
+        (hits) => `Found ${chalk.yellow(hits.length)} repos using no.nav.tsm:ktor`,
+    )
+}
+
+async function updateRepoCache(gitter: Gitter): Promise<Awaited<ReturnType<typeof getAllRepos>>> {
     const team = await getTeam()
 
     const repos = await withSpinner(
@@ -79,11 +119,7 @@ async function findKtorRepos(gitter: Gitter): Promise<KtorRepo[]> {
         () => `Updated ${chalk.yellow(repos.length)} repos`,
     )
 
-    return await withSpinner(
-        'Looking for no.nav.tsm:ktor',
-        async () => (await Promise.all(repos.map((repo) => getKtorRepo(repo.name)))).filter((it) => it != null),
-        (hits) => `Found ${chalk.yellow(hits.length)} repos using no.nav.tsm:ktor`,
-    )
+    return repos
 }
 
 /**

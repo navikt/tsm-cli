@@ -31,6 +31,39 @@ export function settingsGradleFile(repo: string): ReturnType<typeof Bun.file> {
     return Bun.file(path.join(GIT_CACHE_DIR, repo, 'settings.gradle.kts'))
 }
 
+const TSM_KTOR_LIBS_REGEX = /\btsmKtorLibs((?:\.\w+)+)/g
+
+export type KtorLibsRepo = {
+    name: string
+    /** Sorted, unique list of used libs, e.g. `["core", "kafka.sykmeldinger"]`. */
+    libs: string[]
+}
+
+/**
+ * Looks for `tsmKtorLibs.<lib>` references in the repo's build.gradle.kts files, returning null
+ * for repos that don't use the version catalog at all.
+ */
+export async function getKtorLibsRepo(name: string): Promise<KtorLibsRepo | null> {
+    const repoDir = path.join(GIT_CACHE_DIR, name)
+    const glob = new Bun.Glob('**/build.gradle.kts')
+
+    const libs = new Set<string>()
+
+    for await (const file of glob.scan({ cwd: repoDir, absolute: true })) {
+        if (file.includes(`${path.sep}build${path.sep}`)) continue
+
+        const content = await Bun.file(file).text()
+
+        for (const [, lib] of content.matchAll(TSM_KTOR_LIBS_REGEX)) {
+            libs.add(lib.slice(1))
+        }
+    }
+
+    if (libs.size === 0) return null
+
+    return { name, libs: [...libs].sort() }
+}
+
 /**
  * Looks for `no.nav.tsm:ktor` in the repo's settings.gradle.kts, returning null for repos that
  * don't use it at all.

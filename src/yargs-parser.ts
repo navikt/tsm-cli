@@ -14,7 +14,7 @@ import { openRepoWeb } from './actions/gh.ts'
 import { pullAllRepositories } from './actions/git.ts'
 import { convertKcatToKafkaCtl } from './actions/kafka/config-convert.ts'
 import { cleanup, kafkaConfig } from './actions/kafka/kafka.ts'
-import { ktor } from './actions/ktor/ktor.ts'
+import { ktor, ktorInfo } from './actions/ktor/ktor.ts'
 import { lastCommits } from './actions/last-commits.ts'
 import { open } from './actions/open.ts'
 import { openPrs } from './actions/prs.ts'
@@ -671,12 +671,23 @@ export const getYargsParser = (argv: string[]): Argv =>
             'ktor',
             'find repos with no.nav.tsm:ktor in settings.gradle.kts',
             (yargs) =>
-                yargs.option('update', {
-                    type: 'boolean',
-                    default: false,
-                    describe: 'upgrade repos to the latest tsm-ktor release, build them and offer to push',
-                }),
+                yargs
+                    .option('update', {
+                        type: 'boolean',
+                        default: false,
+                        describe: 'upgrade repos to the latest tsm-ktor release, build them and offer to push',
+                    })
+                    .command(
+                        'info',
+                        'list which tsm-ktor library modules each app uses (tsmKtorLibs.* in build.gradle.kts)',
+                        (yargs) => yargs,
+                        async () => {
+                            await ktorInfo()
+                        },
+                    ),
             async (args) => {
+                if (args._[1] != null) return
+
                 await ktor(args.update)
             },
         )
