@@ -14,6 +14,7 @@ import { openRepoWeb } from './actions/gh.ts'
 import { pullAllRepositories } from './actions/git.ts'
 import { convertKcatToKafkaCtl } from './actions/kafka/config-convert.ts'
 import { cleanup, kafkaConfig } from './actions/kafka/kafka.ts'
+import { ktor } from './actions/ktor/ktor.ts'
 import { lastCommits } from './actions/last-commits.ts'
 import { createSimpleSykmelding } from './actions/mock'
 import { open } from './actions/open.ts'
@@ -684,6 +685,14 @@ export const getYargsParser = (argv: string[]): Argv =>
             () => {
                 log('Use one of the following commands:')
                 log('\ttsm kafka config "app-name"')
+            },
+        )
+        .command(
+            'ktor',
+            'find repos with no.nav.tsm:ktor in settings.gradle.kts',
+            (yargs) => yargs,
+            async () => {
+                await ktor()
             },
         )
         .command(
