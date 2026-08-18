@@ -78,11 +78,58 @@ export async function ktorInfo(): Promise<void> {
         clack.note(
             withLibs
                 .sort((a, b) => a.name.localeCompare(b.name))
-                .map((it) => [chalk.white(it.name), ...it.libs.map((lib) => `  ${chalk.gray('•')} ${lib}`)].join('\n'))
+                .map((it) => {
+                    const libs = [...it.libs].sort(compareLibs)
+
+                    return [
+                        chalk.white(it.name),
+                        ...libs.map((lib, index) => {
+                            const branch = index === libs.length - 1 ? '└─' : '├─'
+
+                            return `${chalk.gray(branch)} ${chalk.cyan(libGlyph(lib))} ${chalk.gray(lib)}`
+                        }),
+                    ].join('\n')
+                })
                 .join('\n\n'),
             'tsm-ktor modules in use',
         )
     })
+}
+
+const LIB_GLYPHS: Record<string, string> = {
+    core: '◆',
+    auth: '⚿',
+    kafka: '⇄',
+    'kafka.sykmeldinger': '⚕',
+    'kafka.test': '⚗',
+}
+
+/**
+ * Best-effort glyph for a lib, falling back to the parent module's glyph, e.g. `kafka.foo` → ⇄.
+ */
+function libGlyph(lib: string): string {
+    const segments = lib.split('.')
+
+    for (let i = segments.length; i > 0; i--) {
+        const glyph = LIB_GLYPHS[segments.slice(0, i).join('.')] ?? LIB_GLYPHS[segments[i - 1]]
+
+        if (glyph != null) return glyph
+    }
+
+    return '·'
+}
+
+/**
+ * Orders libs by the known order in `LIB_GLYPHS` (core first), unknown libs last and alphabetically.
+ */
+function compareLibs(a: string, b: string): number {
+    const order = Object.keys(LIB_GLYPHS)
+    const aIndex = order.indexOf(a)
+    const bIndex = order.indexOf(b)
+
+    if (aIndex === bIndex) return a.localeCompare(b)
+
+    return (aIndex === -1 ? order.length : aIndex) - (bIndex === -1 ? order.length : bIndex)
 }
 
 async function findKtorRepos(gitter: Gitter): Promise<KtorRepo[]> {
