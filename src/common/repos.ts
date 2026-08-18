@@ -1,5 +1,6 @@
 import chalk from 'chalk'
 
+import { withReposCache } from './cache/repos-cache.ts'
 import { log, logError } from './log.ts'
 import {
     BaseRepoNode,
@@ -16,29 +17,35 @@ export function blacklisted<Repo extends { name: string }>(repo: Repo): boolean 
 }
 
 export async function getAllRepos(team: string, includeArchived: boolean = false): Promise<BaseRepoNode<unknown>[]> {
-    log(chalk.green(`Getting all active repositories for team ${team}...`))
-
-    const result = await ghGqlQuery<OrgTeamRepoResult<unknown>>(
-        /* GraphQL */ `
-            query ($team: String!) {
-                organization(login: "navikt") {
-                    team(slug: $team) {
-                        repositories(orderBy: { field: PUSHED_AT, direction: DESC }) {
-                            nodes {
-                                ...BaseRepoNode
+    const nodes = await withReposCache<BaseRepoNode<unknown>>(
+        `all-${team}`,
+        `all active repositories for team ${team}`,
+        async () => {
+            const result = await ghGqlQuery<OrgTeamRepoResult<unknown>>(
+                /* GraphQL */ `
+                    query ($team: String!) {
+                        organization(login: "navikt") {
+                            team(slug: $team) {
+                                repositories(orderBy: { field: PUSHED_AT, direction: DESC }) {
+                                    nodes {
+                                        ...BaseRepoNode
+                                    }
+                                }
                             }
                         }
                     }
-                }
-            }
 
-            ${BaseRepoNodeFragment}
-        `,
-        { team },
+                    ${BaseRepoNodeFragment}
+                `,
+                { team },
+            )
+
+            return result.organization.team.repositories.nodes
+        },
     )
 
-    if (includeArchived) return result.organization.team.repositories.nodes
-    return removeIgnoredAndArchived(result.organization.team.repositories.nodes).filter(blacklisted)
+    if (includeArchived) return nodes
+    return removeIgnoredAndArchived(nodes).filter(blacklisted)
 }
 
 export async function getRepo(repoFullName: string): Promise<BaseRepoNode<unknown>[]> {

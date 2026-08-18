@@ -46,6 +46,7 @@ import { openResource } from './actions/web.ts'
 import { displayCommitsForPeriod } from './actions/work/work.ts'
 import { updateAnalytics } from './analytics'
 import { showUsageAnalytics } from './analytics/analytics-global.ts'
+import { clearReposCache, setForceRefetch } from './common/cache/repos-cache.ts'
 import { getConfig, updateConfig } from './common/config.ts'
 import { log, logError } from './common/log.ts'
 import { reportChangesSinceLast, updateToNewestVersion } from './updater/self-updater.ts'
@@ -110,8 +111,18 @@ export const getYargsParser = (argv: string[]): Argv =>
                         conflicts: ['query', 'sync-settings'],
                         describe:
                             'sync all repository settings across this teams repositories, e.g. merge settings etc.',
+                    })
+                    .option('force', {
+                        type: 'boolean',
+                        default: false,
+                        describe: 'ignore the 3 hour repo cache and fetch a fresh list of repos from github',
                     }),
             async (args) => {
+                if (args.force) {
+                    clearReposCache()
+                    setForceRefetch(true)
+                }
+
                 if (args.syncSettings) {
                     return syncRepoSettings()
                 }

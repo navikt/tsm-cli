@@ -55,33 +55,33 @@ Nå er du klar til å bruke `tsm`!
 
 <!-- COMPUTER SAYS DON'T TOUCH THIS START -->
 
-- `doctor` - check that all tooling and such looks OK
-- `auth` - login to gcloud
-- `commits` - get the last commits for every repo in the team
-- `prs` - get all open pull requests
-- `repos` - get all repos
-- `vulns` - get all vulnerabilities for the team (Github)
-- `builds` - checks all repos for failing builds (on main)
-- `git` - keep our repos in sync, ex: tsm git sync
-- `work` - see what has happened the last week (or more)
-- `mock` - do stuff with the mock
-- `team` - get all team members
-- `sync-file` - sync a file across specified repos
-- `sync-cmd` - execute a command across multiple repos and stage and commit the changes
-- `sync-replace` - search and replace or delete text blocks across all repos
-- `primary-branch` - get misc repo metadata
-- `mob` - make a mob commit
-- `config` - set config for tsm
-- `upgrade` - update the cli
-- `changelog` - get the latest changes in tsm cli
-- `analytics` - get your own usage stats for tsm cli
-- `open` - open command that opens a project in IntelliJ IDEA
-- `web` - open web page
-- `gh` - open github repo in browser
-- `search` - search github repos for a given regex
-- `kafka` - kafka cli for kafka stuff
-- `ktor` - find repos with no.nav.tsm:ktor in settings.gradle.kts
-- `docker` - docker stuff
+* `doctor` - check that all tooling and such looks OK
+* `auth` - login to gcloud
+* `commits` - get the last commits for every repo in the team
+* `prs` - get all open pull requests
+* `repos` - get all repos
+* `vulns` - get all vulnerabilities for the team (Github)
+* `builds` - checks all repos for failing builds (on main)
+* `git` - keep our repos in sync, ex: tsm git sync
+* `work` - see what has happened the last week (or more)
+* `mock` - do stuff with the mock
+* `team` - get all team members
+* `sync-file` - sync a file across specified repos
+* `sync-cmd` - execute a command across multiple repos and stage and commit the changes
+* `sync-replace` - search and replace or delete text blocks across all repos
+* `primary-branch` - get misc repo metadata
+* `mob` - make a mob commit
+* `config` - set config for tsm
+* `upgrade` - update the cli
+* `changelog` - get the latest changes in tsm cli
+* `analytics` - get your own usage stats for tsm cli
+* `open` - open command that opens a project in IntelliJ IDEA
+* `web` - open web page
+* `gh` - open github repo in browser
+* `search` - search github repos for a given regex
+* `kafka` - kafka cli for kafka stuff
+* `ktor` - find repos with no.nav.tsm:ktor in settings.gradle.kts
+* `docker` - docker stuff
 
 <!-- COMPUTER SAYS DON'T TOUCH THIS END -->
 

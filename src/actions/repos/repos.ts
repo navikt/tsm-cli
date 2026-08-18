@@ -2,10 +2,17 @@ import chalk from 'chalk'
 import { parseISO } from 'date-fns'
 import * as R from 'remeda'
 
+import { withReposCache } from '../../common/cache/repos-cache.ts'
 import { getTeam } from '../../common/config.ts'
 import { coloredTimestamp } from '../../common/date-utils.ts'
 import { log } from '../../common/log.ts'
-import { BaseRepoNodeFragment, ghGqlQuery, OrgTeamRepoResult, removeIgnoredAndArchived } from '../../common/octokit.ts'
+import {
+    BaseRepoNode,
+    BaseRepoNodeFragment,
+    ghGqlQuery,
+    OrgTeamRepoResult,
+    removeIgnoredAndArchived,
+} from '../../common/octokit.ts'
 
 type ExtraPropsOnRepo = {
     primaryLanguage: {
@@ -37,20 +44,22 @@ const reposQuery = /* GraphQL */ `
 export async function getRepos(): Promise<void> {
     const team = await getTeam()
 
-    log(chalk.green(`Getting all repositories for team ${team}...`))
+    const nodes = await withReposCache<BaseRepoNode<ExtraPropsOnRepo>>(
+        `with-lang-${team}`,
+        `all repositories for team ${team}`,
+        async () => {
+            const queryResult = await ghGqlQuery<OrgTeamRepoResult<ExtraPropsOnRepo>>(reposQuery, {
+                team,
+            })
 
-    const queryResult = await ghGqlQuery<OrgTeamRepoResult<ExtraPropsOnRepo>>(reposQuery, {
-        team,
-    })
-
-    log(
-        `\nFound ${chalk.green(
-            removeIgnoredAndArchived(queryResult.organization.team.repositories.nodes).length,
-        )} repos:\n`,
+            return queryResult.organization.team.repositories.nodes
+        },
     )
 
+    log(`\nFound ${chalk.green(removeIgnoredAndArchived(nodes).length)} repos:\n`)
+
     const reposByLang = R.pipe(
-        queryResult.organization.team.repositories.nodes,
+        nodes,
         removeIgnoredAndArchived,
         R.groupBy((it) => it.primaryLanguage?.name ?? 'unknown'),
         R.mapValues(R.sortBy([(it) => it.pushedAt, 'asc'])),
