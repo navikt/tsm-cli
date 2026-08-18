@@ -18,6 +18,9 @@ import {
 
 const COMMIT_MESSAGE = 'automated: upgrade tsm-ktor libs'
 
+/** Gradle builds are heavy, so only run a few at a time. */
+const BUILD_CONCURRENCY = 4
+
 type UpdateResult = { repo: KtorRepo; ok: true } | { repo: KtorRepo; ok: false; output: string }
 
 export async function ktor(update: boolean): Promise<void> {
@@ -170,41 +173,67 @@ async function updateRepoCache(gitter: Gitter): Promise<Awaited<ReturnType<typeo
 }
 
 /**
- * Bumps the version and builds each repo, one at a time, since gradle builds are heavy.
+ * Bumps the version and builds the repos, a few at a time, since gradle builds are heavy.
  */
 async function upgradeRepos(repos: KtorRepo[], version: string): Promise<UpdateResult[]> {
-    const results: UpdateResult[] = []
-
-    for (const [index, repo] of repos.entries()) {
+    for (const repo of repos) {
         await setKtorVersion(repo, version)
-
-        const result = await withSpinner(
-            `[${index + 1}/${repos.length}] ${repo.name}: ./gradlew clean build test`,
-            async (spinner) => {
-                const started = performance.now()
-                const interval = setInterval(() => {
-                    const seconds = Math.round((performance.now() - started) / 1000)
-                    spinner.message(
-                        `[${index + 1}/${repos.length}] ${repo.name}: ./gradlew clean build test (${seconds}s)`,
-                    )
-                }, 1000)
-
-                try {
-                    return await gradleBuild(repo.name)
-                } finally {
-                    clearInterval(interval)
-                }
-            },
-            (result) =>
-                result.ok
-                    ? `${chalk.green('✓')} ${repo.name} built OK on ${version}`
-                    : `${chalk.red('✗')} ${repo.name} failed to build on ${version}`,
-        )
-
-        results.push(result.ok ? { repo, ok: true } : { repo, ok: false, output: result.output })
     }
 
-    return results
+    return await withSpinner(
+        `Building ${repos.length} repos: ./gradlew clean build test`,
+        async (spinner) => {
+            const results: UpdateResult[] = []
+            const queue = [...repos]
+            const running = new Set<string>()
+            const started = performance.now()
+
+            const render = (): void => {
+                const seconds = Math.round((performance.now() - started) / 1000)
+
+                spinner.message(
+                    `[${results.length}/${repos.length}] building (${seconds}s): ${[...running].join(', ')}`,
+                )
+            }
+
+            const interval = setInterval(render, 1000)
+
+            const worker = async (): Promise<void> => {
+                for (let repo = queue.shift(); repo != null; repo = queue.shift()) {
+                    running.add(repo.name)
+                    render()
+
+                    const result = await gradleBuild(repo.name)
+
+                    running.delete(repo.name)
+                    results.push(result.ok ? { repo, ok: true } : { repo, ok: false, output: result.output })
+
+                    clack.log[result.ok ? 'success' : 'error'](
+                        result.ok
+                            ? `${chalk.green('✓')} ${repo.name} built OK on ${version}`
+                            : `${chalk.red('✗')} ${repo.name} failed to build on ${version}`,
+                    )
+                    render()
+                }
+            }
+
+            try {
+                await Promise.all(Array.from({ length: Math.min(BUILD_CONCURRENCY, queue.length) }, () => worker()))
+            } finally {
+                clearInterval(interval)
+            }
+
+            // Keep the reporting order stable, regardless of which build finished first
+            return repos.map((repo) => results.find((it) => it.repo.name === repo.name)).filter((it) => it != null)
+        },
+        (results) => {
+            const failed = results.filter((it) => !it.ok).length
+
+            return failed === 0
+                ? `${chalk.green('✓')} All ${results.length} repos built OK on ${version}`
+                : `${chalk.red('✗')} ${failed} of ${results.length} repos failed to build on ${version}`
+        },
+    )
 }
 
 async function reportAndPush(gitter: Gitter, results: UpdateResult[]): Promise<void> {
