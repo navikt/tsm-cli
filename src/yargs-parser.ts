@@ -701,9 +701,14 @@ export const getYargsParser = (argv: string[]): Argv =>
         .command(
             'ktor',
             'find repos with no.nav.tsm:ktor in settings.gradle.kts',
-            (yargs) => yargs,
-            async () => {
-                await ktor()
+            (yargs) =>
+                yargs.option('update', {
+                    type: 'boolean',
+                    default: false,
+                    describe: 'upgrade repos to the latest tsm-ktor release, build them and offer to push',
+                }),
+            async (args) => {
+                await ktor(args.update)
             },
         )
         .command(
