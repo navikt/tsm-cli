@@ -80,6 +80,7 @@ Nå er du klar til å bruke `tsm`!
 * `search` - search github repos for a given regex
 * `kafka` - kafka cli for kafka stuff
 * `ktor` - find repos with no.nav.tsm:ktor in settings.gradle.kts
+* `gradle` - gradle stuff
 * `docker` - docker stuff
 
 <!-- COMPUTER SAYS DON'T TOUCH THIS END -->

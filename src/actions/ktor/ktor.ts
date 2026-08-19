@@ -1,9 +1,8 @@
 import * as clack from '@clack/prompts'
 import chalk from 'chalk'
 
-import { getTeam } from '../../common/config.ts'
 import { getGitterCache, Gitter } from '../../common/git.ts'
-import { getAllRepos } from '../../common/repos.ts'
+import { updateRepoCache } from '../../common/repos.ts'
 import { tuiSession, withSpinner } from '../../common/tui.ts'
 
 import { gradleBuild } from './gradle.ts'
@@ -143,33 +142,6 @@ async function findKtorRepos(gitter: Gitter): Promise<KtorRepo[]> {
         async () => (await Promise.all(repos.map((repo) => getKtorRepo(repo.name)))).filter((it) => it != null),
         (hits) => `Found ${chalk.yellow(hits.length)} repos using no.nav.tsm:ktor`,
     )
-}
-
-async function updateRepoCache(gitter: Gitter): Promise<Awaited<ReturnType<typeof getAllRepos>>> {
-    const team = await getTeam()
-
-    const repos = await withSpinner(
-        `Fetching repos for ${team}`,
-        () => getAllRepos(team),
-        (repos) => `Found ${chalk.yellow(repos.length)} repos in ${chalk.yellow(team)}`,
-    )
-
-    await withSpinner(
-        'Updating local git cache',
-        async (spinner) => {
-            let done = 0
-
-            await Promise.all(
-                repos.map(async (repo) => {
-                    await gitter.cloneOrPull(repo.name, repo.defaultBranchRef.name, true)
-                    spinner.message(`Updating local git cache (${++done}/${repos.length})`)
-                }),
-            )
-        },
-        () => `Updated ${chalk.yellow(repos.length)} repos`,
-    )
-
-    return repos
 }
 
 /**

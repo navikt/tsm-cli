@@ -12,6 +12,7 @@ import { dockerImages } from './actions/docker.ts'
 import { runDoctor } from './actions/doctor/doctor.ts'
 import { openRepoWeb } from './actions/gh.ts'
 import { pullAllRepositories } from './actions/git.ts'
+import { gradleTsmInput } from './actions/gradle/gradle.ts'
 import { convertKcatToKafkaCtl } from './actions/kafka/config-convert.ts'
 import { cleanup, kafkaConfig } from './actions/kafka/kafka.ts'
 import { ktor, ktorInfo } from './actions/ktor/ktor.ts'
@@ -689,6 +690,22 @@ export const getYargsParser = (argv: string[]): Argv =>
                 if (args._[1] != null) return
 
                 await ktor(args.update)
+            },
+        )
+        .command(
+            'gradle',
+            'gradle stuff',
+            (yargs) =>
+                yargs.command(
+                    'tsm-input',
+                    'find repos using no.nav.tsm.sykmelding:input and which version they use',
+                    async () => {
+                        await gradleTsmInput()
+                    },
+                ),
+            () => {
+                log('Use one of the following commands:')
+                log('\ttsm gradle tsm-input')
             },
         )
         .command(

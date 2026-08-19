@@ -1,6 +1,8 @@
 import chalk from 'chalk'
 
 import { withReposCache } from './cache/repos-cache.ts'
+import { getTeam } from './config.ts'
+import { Gitter } from './git.ts'
 import { log, logError } from './log.ts'
 import {
     BaseRepoNode,
@@ -9,6 +11,7 @@ import {
     OrgTeamRepoResult,
     removeIgnoredAndArchived,
 } from './octokit.ts'
+import { withSpinner } from './tui.ts'
 
 const blacklist: string[] = ['vault-iac', 'omrade-helse-etterlevelse-topic']
 
@@ -46,6 +49,36 @@ export async function getAllRepos(team: string, includeArchived: boolean = false
 
     if (includeArchived) return nodes
     return removeIgnoredAndArchived(nodes).filter(blacklisted)
+}
+
+/**
+ * Fetches all repos for the current team and makes sure the local git cache is up to date.
+ */
+export async function updateRepoCache(gitter: Gitter): Promise<BaseRepoNode<unknown>[]> {
+    const team = await getTeam()
+
+    const repos = await withSpinner(
+        `Fetching repos for ${team}`,
+        () => getAllRepos(team),
+        (repos) => `Found ${chalk.yellow(repos.length)} repos in ${chalk.yellow(team)}`,
+    )
+
+    await withSpinner(
+        'Updating local git cache',
+        async (spinner) => {
+            let done = 0
+
+            await Promise.all(
+                repos.map(async (repo) => {
+                    await gitter.cloneOrPull(repo.name, repo.defaultBranchRef.name, true)
+                    spinner.message(`Updating local git cache (${++done}/${repos.length})`)
+                }),
+            )
+        },
+        () => `Updated ${chalk.yellow(repos.length)} repos`,
+    )
+
+    return repos
 }
 
 export async function getRepo(repoFullName: string): Promise<BaseRepoNode<unknown>[]> {
