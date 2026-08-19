@@ -180,31 +180,36 @@ function toCategoryBody(commits: ClassifiedCommit[]): string {
         return chalk.gray('  0 changes')
     }
 
-    const deduplicated = R.groupBy(commits, (it) =>
-        it.commit.message
-            .split('\n')[0]
-            .replace(/\s*\(#[0-9]+\)/, '')
-            .trim(),
-    )
+    const deduplicated = R.groupBy(commits, (it) => {
+        const parsed = parseConventionalSubject(it.commit.message)
+
+        return `${parsed?.scope ?? ''}|${cleanSubject(it.commit.message)}`
+    })
 
     return R.values(deduplicated)
         .map((messages) => {
-            const cleanMessage = messages[0].commit.message
-                .split('\n')[0]
-                .replace(/^(\w+):/, '')
-                .replace(/\[skip\s*-?ci]/, '')
-                .replace(/\s*\(#[0-9]+\)/, '')
-                .trim()
+            const parsed = parseConventionalSubject(messages[0].commit.message)
+            const cleanMessage = cleanSubject(messages[0].commit.message)
+            const scope = parsed?.scope != null ? `${chalk.yellow(parsed.scope)}: ` : ''
 
             if (messages.length === 1) {
-                return `  ${cleanMessage} in ${chalk.green(messages[0].repo)}`
+                return `  ${scope}${cleanMessage} in ${chalk.green(messages[0].repo)}`
             } else if (messages.length <= 3) {
-                return `  ${cleanMessage} in ${messages.map((it) => chalk.green(it.repo)).join(', ')}`
+                return `  ${scope}${cleanMessage} in ${messages.map((it) => chalk.green(it.repo)).join(', ')}`
             } else {
-                return `  ${cleanMessage} in ${chalk.blueBright(`${messages.length} repos`)}`
+                return `  ${scope}${cleanMessage} in ${chalk.blueBright(`${messages.length} repos`)}`
             }
         })
         .join('\n')
+}
+
+function cleanSubject(message: string): string {
+    const parsed = parseConventionalSubject(message)
+
+    return (parsed?.rest ?? message.split('\n')[0])
+        .replace(/\[skip\s*-?ci]/, '')
+        .replace(/\s*\(#[0-9]+\)/, '')
+        .trim()
 }
 
 function toUnknownLine(commit: ClassifiedCommit): string {
@@ -226,6 +231,25 @@ function classifyCommit(commit: {
         case commit.message.includes('chore(deps)'):
             return 'deps'
         default:
-            return commit.message.match(/^(\w+):/)?.[1] ?? 'unknown'
+            return parseConventionalSubject(commit.message)?.type ?? 'unknown'
+    }
+}
+
+/**
+ * Matches conventional commit subjects, with optional scope and breaking change marker:
+ * `feat: msg`, `feat(scope): msg`, `feat(scope)!: msg`
+ */
+const conventionalCommitRegex = /^(\w+)(?:\(([^()]+)\))?!?:\s*/
+
+function parseConventionalSubject(message: string): { type: string; scope: string | null; rest: string } | null {
+    const subject = message.split('\n')[0]
+    const match = subject.match(conventionalCommitRegex)
+
+    if (match == null) return null
+
+    return {
+        type: match[1],
+        scope: match[2] ?? null,
+        rest: subject.slice(match[0].length),
     }
 }
