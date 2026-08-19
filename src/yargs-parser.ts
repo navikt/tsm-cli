@@ -715,9 +715,15 @@ export const getYargsParser = (argv: string[]): Argv =>
                     .command(
                         'regula',
                         'find repos using the regulus-regula libs and which versions they use',
-                        (yargs) => yargs,
-                        async () => {
-                            await gradleRegula()
+                        (yargs) =>
+                            yargs.option('update', {
+                                type: 'boolean',
+                                default: false,
+                                describe:
+                                    'upgrade correctly configured repos to the latest regulus-regula release, build them and offer to push',
+                            }),
+                        async (args) => {
+                            await gradleRegula(args.update)
                         },
                     ),
             () => {

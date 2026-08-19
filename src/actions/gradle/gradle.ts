@@ -16,10 +16,11 @@ import {
     setCatalogVersion,
     toUsageLine,
 } from './catalog-lib.ts'
-import { libName, REGULA_LIBS } from './regula.ts'
+import { getLatestRegulaVersion, libName, REGULA_LIBS } from './regula.ts'
 import { getLatestTsmInputVersion, TSM_INPUT } from './tsm-input.ts'
 
-const COMMIT_MESSAGE = 'automated: upgrade tsm-sykmelding-input'
+const TSM_INPUT_COMMIT_MESSAGE = 'automated: upgrade tsm-sykmelding-input'
+const REGULA_COMMIT_MESSAGE = 'automated: upgrade regulus-regula libs'
 
 /**
  * Reports which repos use no.nav.tsm.sykmelding:input, and which version they're on.
@@ -86,16 +87,17 @@ export async function gradleTsmInput(update: boolean): Promise<void> {
 
         const results = await buildRepos(outdated, latest)
 
-        await reportAndPush(gitter, results, { file: CATALOG_FILE, commitMessage: COMMIT_MESSAGE })
+        await reportAndPush(gitter, results, { file: CATALOG_FILE, commitMessage: TSM_INPUT_COMMIT_MESSAGE })
     })
 }
 
 /**
  * Reports which repos use the regulus-regula libs, and which versions they're on.
  */
-export async function gradleRegula(): Promise<void> {
+export async function gradleRegula(update: boolean): Promise<void> {
     await tuiSession(chalk.bgCyan(chalk.black(' tsm gradle regula ')), async () => {
-        const repos = await updateRepoCache(getGitterCache())
+        const gitter = getGitterCache()
+        const repos = await updateRepoCache(gitter)
 
         const hits = await withSpinner(
             `Looking for ${REGULA_LIBS.map((it) => it.module).join(' and ')}`,
@@ -109,21 +111,61 @@ export async function gradleRegula(): Promise<void> {
             return
         }
 
+        if (!update) {
+            clack.note(hits.map(toRepoLines).join('\n\n'), 'regulus-regula versions')
+            return
+        }
+
+        const latest = await withSpinner(
+            'Fetching latest regulus-regula release',
+            () => getLatestRegulaVersion(),
+            (version) => `Latest regulus-regula release is ${chalk.yellow(version)}`,
+        )
+
+        const skipped = hits
+            .map(({ name, libs }) => ({ name, libs: libs.filter((it) => !isUpdatable(it.usage, it.spec)) }))
+            .filter((it) => it.libs.length > 0)
+
+        if (skipped.length > 0) {
+            clack.log.warn(`Skipping incorrectly configured libs:\n${skipped.map(toRepoLines).join('\n\n')}`)
+        }
+
+        const outdated = hits
+            .map(({ name, libs }) => ({
+                name,
+                libs: libs.filter((it) => isUpdatable(it.usage, it.spec) && it.usage.version !== latest),
+            }))
+            .filter((it) => it.libs.length > 0)
+
+        if (outdated.length === 0) {
+            clack.log.success(`All updatable repos are already on ${latest}`)
+            return
+        }
+
         clack.note(
-            hits
+            outdated
                 .map(({ name, libs }) =>
                     [
                         chalk.white(name),
-                        ...libs.map(({ spec, usage }, index) => {
-                            const branch = index === libs.length - 1 ? '└─' : '├─'
-
-                            return `${chalk.gray(branch)} ${toUsageLine(libName(spec), usage, spec)}`
-                        }),
+                        ...libs.map(
+                            ({ spec, usage }) =>
+                                `  ${libName(spec)}: ${chalk.red(usage.version)} → ${chalk.green(latest)}`,
+                        ),
                     ].join('\n'),
                 )
                 .join('\n\n'),
-            'regulus-regula versions',
+            `${outdated.length} repos to upgrade`,
         )
+
+        for (const { name, libs } of outdated) {
+            for (const { spec, usage } of libs) {
+                await setCatalogVersion({ name, usage }, spec, latest)
+            }
+        }
+
+        const results = await buildRepos(outdated, latest)
+
+        await reportAndPush(gitter, results, { file: CATALOG_FILE, commitMessage: REGULA_COMMIT_MESSAGE })
     })
 }
 
@@ -136,4 +178,16 @@ async function findRegulaLibs(name: string): Promise<RegulaRepo> {
     const libs = await Promise.all(REGULA_LIBS.map(async (spec) => ({ spec, usage: await findLibUsage(name, spec) })))
 
     return { name, libs: libs.filter((it): it is { spec: LibSpec; usage: LibUsage } => it.usage != null) }
+}
+
+/** The repo name, with one line per lib it uses. */
+function toRepoLines({ name, libs }: RegulaRepo): string {
+    return [
+        chalk.white(name),
+        ...libs.map(({ spec, usage }, index) => {
+            const branch = index === libs.length - 1 ? '└─' : '├─'
+
+            return `${chalk.gray(branch)} ${toUsageLine(libName(spec), usage, spec)}`
+        }),
+    ].join('\n')
 }
