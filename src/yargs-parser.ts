@@ -699,8 +699,15 @@ export const getYargsParser = (argv: string[]): Argv =>
                 yargs.command(
                     'tsm-input',
                     'find repos using no.nav.tsm.sykmelding:input and which version they use',
-                    async () => {
-                        await gradleTsmInput()
+                    (yargs) =>
+                        yargs.option('update', {
+                            type: 'boolean',
+                            default: false,
+                            describe:
+                                'upgrade correctly configured repos to the latest tsm-sykmelding-input release, build them and offer to push',
+                        }),
+                    async (args) => {
+                        await gradleTsmInput(args.update)
                     },
                 ),
             () => {

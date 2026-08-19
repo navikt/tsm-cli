@@ -1,12 +1,16 @@
 import path from 'node:path'
 
 import { GIT_CACHE_DIR } from '../../common/cache.ts'
+import { getOctokitClient } from '../../common/octokit.ts'
 
 /** The coordinate we are looking for in build.gradle.kts and the version catalog. */
 export const TSM_INPUT_MODULE = 'no.nav.tsm.sykmelding:input'
 
 /** The version catalog alias (and version ref) we expect the lib to be declared with. */
 export const EXPECTED_ALIAS = 'tsm-sykmeldinger-input'
+
+/** Path of the version catalog, relative to the repo root. */
+export const CATALOG_FILE = 'gradle/libs.versions.toml'
 
 export type InputRepo = {
     name: string
@@ -62,6 +66,54 @@ export async function getInputRepo(name: string): Promise<InputRepo | null> {
     }
 }
 
+/**
+ * Latest released version of navikt/tsm-sykmelding-input, without the leading `v`.
+ */
+export async function getLatestTsmInputVersion(): Promise<string> {
+    const { data } = await getOctokitClient().rest.repos.getLatestRelease({
+        owner: 'navikt',
+        repo: 'tsm-sykmelding-input',
+    })
+
+    return data.tag_name.replace(/^v/, '')
+}
+
+/**
+ * Writes a new version for the repo's `[versions]` entry in the version catalog. Only repos that
+ * are correctly configured (expected alias and version ref) can be updated.
+ */
+export async function setInputVersion(repo: InputRepo, version: string): Promise<void> {
+    if (!isUpdatable(repo)) {
+        throw new Error(`${repo.name} does not declare ${EXPECTED_ALIAS} in ${CATALOG_FILE}`)
+    }
+
+    const file = Bun.file(path.join(GIT_CACHE_DIR, repo.name, CATALOG_FILE))
+    const content = await file.text()
+    const updated = content.replace(
+        new RegExp(`^(\\s*${escape(EXPECTED_ALIAS)}\\s*=\\s*)"[^"]+"`, 'm'),
+        `$1"${version}"`,
+    )
+
+    if (updated === content) {
+        throw new Error(`Unable to update ${EXPECTED_ALIAS} in ${repo.name}/${CATALOG_FILE}`)
+    }
+
+    await Bun.write(file, updated)
+}
+
+/**
+ * Only repos using the expected catalog alias and version ref, with a resolvable version, are safe
+ * to bump automatically.
+ */
+export function isUpdatable(repo: InputRepo): boolean {
+    return (
+        repo.source === 'catalog' &&
+        repo.alias === EXPECTED_ALIAS &&
+        repo.versionRef === EXPECTED_ALIAS &&
+        repo.version != null
+    )
+}
+
 async function readBuildFiles(repo: string): Promise<string[]> {
     const repoDir = path.join(GIT_CACHE_DIR, repo)
     const glob = new Bun.Glob('**/build.gradle.kts')
@@ -77,7 +129,7 @@ async function readBuildFiles(repo: string): Promise<string[]> {
 }
 
 async function readCatalog(repo: string): Promise<string | null> {
-    const file = Bun.file(path.join(GIT_CACHE_DIR, repo, 'gradle', 'libs.versions.toml'))
+    const file = Bun.file(path.join(GIT_CACHE_DIR, repo, CATALOG_FILE))
 
     return (await file.exists()) ? await file.text() : null
 }
