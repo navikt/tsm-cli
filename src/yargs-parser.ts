@@ -8,6 +8,7 @@ import { hideBin } from 'yargs/helpers'
 import { auth } from './actions/auth.ts'
 import { checkBuilds } from './actions/builds/builds.ts'
 import { coAuthors } from './actions/co-authors.ts'
+import { completion } from './actions/completion.ts'
 import { dockerImages } from './actions/docker.ts'
 import { runDoctor } from './actions/doctor/doctor.ts'
 import { openRepoWeb } from './actions/gh.ts'
@@ -727,7 +728,21 @@ export const getYargsParser = (argv: string[]): Argv =>
                 log('\ttsm docker images')
             },
         )
-        .completion('completion', 'print the shell completion script, see the README for how to enable it')
+        // Enables `tsm --get-yargs-completions`, hidden since `tsm completion` is the user facing bit
+        .completion('__completions', false)
+        .command(
+            'completion',
+            'shell completions, use --install to set it up automatically',
+            (yargs) =>
+                yargs.option('install', {
+                    type: 'boolean',
+                    default: false,
+                    describe: 'write the completion script to where your shell picks it up',
+                }),
+            async (args) => {
+                await completion(args.install, getCompletionScript())
+            },
+        )
         .middleware(async (yargs) => {
             const { $0: _, _: command, ...args } = yargs
 
@@ -743,3 +758,28 @@ export const getYargsParser = (argv: string[]): Argv =>
 
             void updateAnalytics(command, args)
         })
+
+/**
+ * The completion script yargs generates for the shell in `$SHELL`. Yargs only knows how to print
+ * it, so we catch it on its way to stdout.
+ */
+function getCompletionScript(): string {
+    // oxlint-disable no-console -- yargs logs the script through console.log, so we have to catch it there
+    const lines: string[] = []
+    const original = console.log
+
+    console.log = (...args: unknown[]): void => void lines.push(args.join(' '))
+
+    try {
+        getYargsParser(['bun', 'tsm']).showCompletionScript()
+    } finally {
+        console.log = original
+    }
+
+    return (
+        lines
+            .join('\n')
+            // Yargs points at its own hidden completion command, ours is nicer
+            .replace(/^# Installation:.*\n#\s+or.*$/m, '# Installation: tsm completion --install')
+    )
+}

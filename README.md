@@ -53,36 +53,20 @@ Nå er du klar til å bruke `tsm`!
 
 ### Autocompletion
 
-`tsm` kan generere et completion-script for shellet ditt, slik at du får forslag på kommandoer,
-subkommandoer og flagg når du trykker `<TAB>`. Scriptet genereres for shellet i `$SHELL`.
-
-#### Zsh
-
-Legg scriptet som en autoload-funksjon i en mappe som ligger i `$fpath` – filen _må_ hete `_tsm`:
+`tsm` kan sette opp completions for zsh og bash, slik at du får forslag på kommandoer, subkommandoer
+og flagg når du trykker `<TAB>`:
 
 ```bash
-mkdir -p ~/.zsh/completions
-tsm completion > ~/.zsh/completions/_tsm
+tsm completion --install
 ```
 
-Har du ikke den mappa i `$fpath` fra før, legg dette i `~/.zshrc` _før_ `compinit` kjøres:
+Den finner selv ut hvor scriptet skal ligge, basert på shellet i `$SHELL`:
 
-```bash
-fpath=(~/.zsh/completions $fpath)
-```
-
-Bruker du oh-my-zsh kan du droppe `fpath`-linja og heller skrive rett til
-`~/.oh-my-zsh/completions/_tsm`, og med Homebrew til
-`$(brew --prefix)/share/zsh/site-functions/_tsm`. Begge ligger allerede i `$fpath`.
-
-#### Bash
-
-Med `bash-completion` installert lastes completions automatisk fra navnet på kommandoen:
-
-```bash
-mkdir -p ~/.local/share/bash-completion/completions
-tsm completion > ~/.local/share/bash-completion/completions/tsm
-```
+- **zsh**: som `_tsm` i en completions-mappe som allerede ligger i `$fpath` (f.eks.
+  `~/.oh-my-zsh/custom/completions`). Finnes ingen slik mappe legges det i
+  `~/.config/tsm/completions`, og du får beskjed om den ene linja du må legge i `~/.zshrc`.
+- **bash**: som `~/.local/share/bash-completion/completions/tsm`, som `bash-completion` laster
+  automatisk.
 
 Start et nytt shell, så virker det:
 
@@ -91,6 +75,8 @@ tsm gr<TAB>                   # -> tsm gradle
 tsm gradle <TAB>              # -> tsm-input
 tsm gradle tsm-input --<TAB>  # -> --update
 ```
+
+Vil du heller installere det selv, skriver `tsm completion` scriptet til stdout.
 
 ### Automatisk generert dokumentasjon
 
@@ -123,7 +109,7 @@ tsm gradle tsm-input --<TAB>  # -> --update
 * `ktor` - find repos with no.nav.tsm:ktor in settings.gradle.kts
 * `gradle` - gradle stuff
 * `docker` - docker stuff
-* `completion` - print the shell completion script, see the README for how to enable it
+* `completion` - shell completions, use --install to set it up automatically
 
 <!-- COMPUTER SAYS DON'T TOUCH THIS END -->
 
