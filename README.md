@@ -51,6 +51,47 @@ npm i -g @navikt/teamsykmelding-cli
 
 Nå er du klar til å bruke `tsm`!
 
+### Autocompletion
+
+`tsm` kan generere et completion-script for shellet ditt, slik at du får forslag på kommandoer,
+subkommandoer og flagg når du trykker `<TAB>`. Scriptet genereres for shellet i `$SHELL`.
+
+#### Zsh
+
+Legg scriptet som en autoload-funksjon i en mappe som ligger i `$fpath` – filen _må_ hete `_tsm`:
+
+```bash
+mkdir -p ~/.zsh/completions
+tsm completion > ~/.zsh/completions/_tsm
+```
+
+Har du ikke den mappa i `$fpath` fra før, legg dette i `~/.zshrc` _før_ `compinit` kjøres:
+
+```bash
+fpath=(~/.zsh/completions $fpath)
+```
+
+Bruker du oh-my-zsh kan du droppe `fpath`-linja og heller skrive rett til
+`~/.oh-my-zsh/completions/_tsm`, og med Homebrew til
+`$(brew --prefix)/share/zsh/site-functions/_tsm`. Begge ligger allerede i `$fpath`.
+
+#### Bash
+
+Med `bash-completion` installert lastes completions automatisk fra navnet på kommandoen:
+
+```bash
+mkdir -p ~/.local/share/bash-completion/completions
+tsm completion > ~/.local/share/bash-completion/completions/tsm
+```
+
+Start et nytt shell, så virker det:
+
+```bash
+tsm gr<TAB>                   # -> tsm gradle
+tsm gradle <TAB>              # -> tsm-input
+tsm gradle tsm-input --<TAB>  # -> --update
+```
+
 ### Automatisk generert dokumentasjon
 
 <!-- COMPUTER SAYS DON'T TOUCH THIS START -->
@@ -82,6 +123,7 @@ Nå er du klar til å bruke `tsm`!
 * `ktor` - find repos with no.nav.tsm:ktor in settings.gradle.kts
 * `gradle` - gradle stuff
 * `docker` - docker stuff
+* `completion` - print the shell completion script, see the README for how to enable it
 
 <!-- COMPUTER SAYS DON'T TOUCH THIS END -->
 

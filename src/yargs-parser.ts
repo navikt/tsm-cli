@@ -727,11 +727,17 @@ export const getYargsParser = (argv: string[]): Argv =>
                 log('\ttsm docker images')
             },
         )
+        .completion('completion', 'print the shell completion script, see the README for how to enable it')
         .middleware(async (yargs) => {
             const { $0: _, _: command, ...args } = yargs
 
             if (command[0] === 'update') {
                 // Ignore update command, since it's always being run
+                return
+            }
+
+            if (process.argv.includes('--get-yargs-completions')) {
+                // The shell asking for completions isn't usage worth tracking
                 return
             }
 

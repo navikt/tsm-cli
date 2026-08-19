@@ -15,7 +15,11 @@ if (Bun.argv.length >= 3 && Bun.argv[2].endsWith('tsmx')) {
     process.exit(0)
 }
 
+/** The shell asks for completions by invoking us, so keep that output clean and fast. */
+const isCompleting = Bun.argv.includes('--get-yargs-completions')
+
 if (
+    !isCompleting &&
     Bun.argv.find((it) => it.includes('update')) == null &&
     // when sanity checking bundle, don't look for new updates
     !Bun.argv[1].includes('tsm-cli/bin')
@@ -44,7 +48,7 @@ if (!semver || !semver.satisfies(Bun.version, '>= 1.2.0')) {
     process.exit(1)
 }
 
-if (!(await isTeamConfigured()) && !Bun.argv.includes('config')) {
+if (!isCompleting && !(await isTeamConfigured()) && !Bun.argv.includes('config')) {
     log(chalk.red('No team configured, please run:'))
     log(chalk.green('tsm config --team=<team-name>'))
     process.exit(1)
