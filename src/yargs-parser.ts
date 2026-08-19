@@ -13,7 +13,7 @@ import { dockerImages } from './actions/docker.ts'
 import { runDoctor } from './actions/doctor/doctor.ts'
 import { openRepoWeb } from './actions/gh.ts'
 import { pullAllRepositories } from './actions/git.ts'
-import { gradleTsmInput } from './actions/gradle/gradle.ts'
+import { gradleRegula, gradleTsmInput } from './actions/gradle/gradle.ts'
 import { convertKcatToKafkaCtl } from './actions/kafka/config-convert.ts'
 import { cleanup, kafkaConfig } from './actions/kafka/kafka.ts'
 import { ktor, ktorInfo } from './actions/ktor/ktor.ts'
@@ -697,23 +697,33 @@ export const getYargsParser = (argv: string[]): Argv =>
             'gradle',
             'gradle stuff',
             (yargs) =>
-                yargs.command(
-                    'tsm-input',
-                    'find repos using no.nav.tsm.sykmelding:input and which version they use',
-                    (yargs) =>
-                        yargs.option('update', {
-                            type: 'boolean',
-                            default: false,
-                            describe:
-                                'upgrade correctly configured repos to the latest tsm-sykmelding-input release, build them and offer to push',
-                        }),
-                    async (args) => {
-                        await gradleTsmInput(args.update)
-                    },
-                ),
+                yargs
+                    .command(
+                        'tsm-input',
+                        'find repos using no.nav.tsm.sykmelding:input and which version they use',
+                        (yargs) =>
+                            yargs.option('update', {
+                                type: 'boolean',
+                                default: false,
+                                describe:
+                                    'upgrade correctly configured repos to the latest tsm-sykmelding-input release, build them and offer to push',
+                            }),
+                        async (args) => {
+                            await gradleTsmInput(args.update)
+                        },
+                    )
+                    .command(
+                        'regula',
+                        'find repos using the regulus-regula libs and which versions they use',
+                        (yargs) => yargs,
+                        async () => {
+                            await gradleRegula()
+                        },
+                    ),
             () => {
                 log('Use one of the following commands:')
                 log('\ttsm gradle tsm-input')
+                log('\ttsm gradle regula')
             },
         )
         .command(
