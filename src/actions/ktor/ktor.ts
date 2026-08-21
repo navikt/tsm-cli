@@ -104,7 +104,7 @@ export async function ktorInfo(): Promise<void> {
 
 const AUTH_TYPE_GLYPHS: Record<AuthType, string> = {
     machine: '⚙',
-    'on-behalf-of': '👤',
+    'on-behalf-of': '↪',
 }
 
 /**
