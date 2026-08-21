@@ -7,6 +7,7 @@ import { updateRepoCache } from '../../common/repos.ts'
 import { tuiSession, withSpinner } from '../../common/tui.ts'
 
 import {
+    AuthType,
     EXPECTED_VERSION_VARIABLE,
     getKtorLibsRepo,
     getKtorRepo,
@@ -85,15 +86,41 @@ export async function ktorInfo(): Promise<void> {
                     return [
                         chalk.white(it.name),
                         ...libs.map((lib, index) => {
-                            const branch = index === libs.length - 1 ? '└─' : '├─'
+                            const last = index === libs.length - 1
+                            const branch = last ? '└─' : '├─'
+                            const line = `${chalk.gray(branch)} ${chalk.cyan(libGlyph(lib))} ${chalk.gray(lib)}`
 
-                            return `${chalk.gray(branch)} ${chalk.cyan(libGlyph(lib))} ${chalk.gray(lib)}`
+                            if (lib !== 'auth') return line
+
+                            return [line, ...authLines(it.authTypes, last)].join('\n')
                         }),
                     ].join('\n')
                 })
                 .join('\n\n'),
             'tsm-ktor modules in use',
         )
+    })
+}
+
+const AUTH_TYPE_GLYPHS: Record<AuthType, string> = {
+    machine: '⚙',
+    'on-behalf-of': '👤',
+}
+
+/**
+ * Renders the Entra auth flows found in the app as a nested level under the `auth` lib.
+ */
+function authLines(authTypes: AuthType[], lastLib: boolean): string[] {
+    const indent = lastLib ? '   ' : `${chalk.gray('│')}  `
+
+    if (authTypes.length === 0) {
+        return [`${indent}${chalk.gray('└─')} ${chalk.yellow('?')} ${chalk.yellow('no entra config found')}`]
+    }
+
+    return authTypes.map((type, index) => {
+        const branch = index === authTypes.length - 1 ? '└─' : '├─'
+
+        return `${indent}${chalk.gray(branch)} ${AUTH_TYPE_GLYPHS[type]} ${chalk.magenta(type)}`
     })
 }
 

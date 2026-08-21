@@ -37,6 +37,41 @@ export type KtorLibsRepo = {
     name: string
     /** Sorted, unique list of used libs, e.g. `["core", "kafka.sykmeldinger"]`. */
     libs: string[]
+    /** Which Entra auth flows the app configures, empty when the `auth` lib isn't used. */
+    authTypes: AuthType[]
+}
+
+export type AuthType = 'machine' | 'on-behalf-of'
+
+const AUTH_BLOCK_REGEXES: { regex: RegExp; types: AuthType[] }[] = [
+    { regex: /\bentraMachineToken\s*(\{|\()/, types: ['machine'] },
+    { regex: /\bentraOnBehalfOf\s*(\{|\()/, types: ['on-behalf-of'] },
+    { regex: /\bentraBoth\s*(\{|\()/, types: ['machine', 'on-behalf-of'] },
+]
+
+const AUTH_TYPE_ORDER: AuthType[] = ['machine', 'on-behalf-of']
+
+/**
+ * Scans the repo's Kotlin sources for `entraMachineToken`/`entraOnBehalfOf`/`entraBoth` blocks. An
+ * app can configure these across multiple files, so all hits are unioned.
+ */
+async function getAuthTypes(repoDir: string): Promise<AuthType[]> {
+    const glob = new Bun.Glob('**/*.kt')
+    const types = new Set<AuthType>()
+
+    for await (const file of glob.scan({ cwd: repoDir, absolute: true })) {
+        if (file.includes(`${path.sep}build${path.sep}`)) continue
+
+        const content = await Bun.file(file).text()
+
+        for (const { regex, types: hits } of AUTH_BLOCK_REGEXES) {
+            if (regex.test(content)) hits.forEach((it) => types.add(it))
+        }
+
+        if (types.size === AUTH_TYPE_ORDER.length) break
+    }
+
+    return AUTH_TYPE_ORDER.filter((it) => types.has(it))
 }
 
 /**
@@ -61,7 +96,11 @@ export async function getKtorLibsRepo(name: string): Promise<KtorLibsRepo | null
 
     if (libs.size === 0) return null
 
-    return { name, libs: [...libs].sort() }
+    return {
+        name,
+        libs: [...libs].sort(),
+        authTypes: libs.has('auth') ? await getAuthTypes(repoDir) : [],
+    }
 }
 
 /**
