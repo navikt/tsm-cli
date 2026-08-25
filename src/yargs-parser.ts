@@ -13,7 +13,7 @@ import { dockerImages } from './actions/docker.ts'
 import { runDoctor } from './actions/doctor/doctor.ts'
 import { openRepoWeb } from './actions/gh.ts'
 import { pullAllRepositories } from './actions/git.ts'
-import { gradleRegula, gradleTsmInput } from './actions/gradle/gradle.ts'
+import { gradlePdlClient, gradleRegula, gradleTsmInput } from './actions/gradle/gradle.ts'
 import { convertKcatToKafkaCtl } from './actions/kafka/config-convert.ts'
 import { cleanup, kafkaConfig } from './actions/kafka/kafka.ts'
 import { ktor, ktorInfo } from './actions/ktor/ktor.ts'
@@ -725,11 +725,26 @@ export const getYargsParser = (argv: string[]): Argv =>
                         async (args) => {
                             await gradleRegula(args.update)
                         },
+                    )
+                    .command(
+                        'pdl-client',
+                        'find repos using no.nav.tsm:pdl-client and which version they use',
+                        (yargs) =>
+                            yargs.option('update', {
+                                type: 'boolean',
+                                default: false,
+                                describe:
+                                    'upgrade correctly configured repos to the latest tsm-pdl-client release, build them and offer to push',
+                            }),
+                        async (args) => {
+                            await gradlePdlClient(args.update)
+                        },
                     ),
             () => {
                 log('Use one of the following commands:')
                 log('\ttsm gradle tsm-input')
                 log('\ttsm gradle regula')
+                log('\ttsm gradle pdl-client')
             },
         )
         .command(

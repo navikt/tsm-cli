@@ -16,11 +16,13 @@ import {
     setCatalogVersion,
     toUsageLine,
 } from './catalog-lib.ts'
+import { getLatestPdlClientVersion, PDL_CLIENT } from './pdl-client.ts'
 import { getLatestRegulaVersion, libName, REGULA_LIBS } from './regula.ts'
 import { getLatestTsmInputVersion, TSM_INPUT } from './tsm-input.ts'
 
 const TSM_INPUT_COMMIT_MESSAGE = 'automated: upgrade tsm-sykmelding-input'
 const REGULA_COMMIT_MESSAGE = 'automated: upgrade regulus-regula libs'
+const PDL_CLIENT_COMMIT_MESSAGE = 'automated: upgrade tsm-pdl-client'
 
 /**
  * Reports which repos use no.nav.tsm.sykmelding:input, and which version they're on.
@@ -88,6 +90,75 @@ export async function gradleTsmInput(update: boolean): Promise<void> {
         const results = await buildRepos(outdated, latest)
 
         await reportAndPush(gitter, results, { file: CATALOG_FILE, commitMessage: TSM_INPUT_COMMIT_MESSAGE })
+    })
+}
+
+/**
+ * Reports which repos use no.nav.tsm:pdl-client, and which version they're on.
+ */
+export async function gradlePdlClient(update: boolean): Promise<void> {
+    await tuiSession(chalk.bgCyan(chalk.black(' tsm gradle pdl-client ')), async () => {
+        const gitter = getGitterCache()
+        const repos = await updateRepoCache(gitter)
+
+        const hits = await withSpinner(
+            `Looking for ${PDL_CLIENT.module}`,
+            () =>
+                findLibRepos(
+                    repos.map((it) => it.name),
+                    PDL_CLIENT,
+                ),
+            (hits) => `Found ${chalk.yellow(hits.length)} repos using ${PDL_CLIENT.module}`,
+        )
+
+        if (hits.length === 0) {
+            clack.log.warn(`No repos use ${PDL_CLIENT.module}`)
+            return
+        }
+
+        if (!update) {
+            clack.note(
+                hits.map((it) => toUsageLine(it.name, it.usage, PDL_CLIENT)).join('\n'),
+                `${PDL_CLIENT.expectedAlias} versions`,
+            )
+            return
+        }
+
+        const latest = await withSpinner(
+            'Fetching latest tsm-pdl-client release',
+            () => getLatestPdlClientVersion(),
+            (version) => `Latest tsm-pdl-client release is ${chalk.yellow(version)}`,
+        )
+
+        const skipped = hits.filter((it) => !isUpdatable(it.usage, PDL_CLIENT))
+
+        if (skipped.length > 0) {
+            clack.log.warn(
+                `Skipping ${skipped.length} incorrectly configured repos:\n${skipped
+                    .map((it) => toUsageLine(it.name, it.usage, PDL_CLIENT))
+                    .join('\n')}`,
+            )
+        }
+
+        const outdated = hits.filter((it) => isUpdatable(it.usage, PDL_CLIENT) && it.usage.version !== latest)
+
+        if (outdated.length === 0) {
+            clack.log.success(`All ${hits.length - skipped.length} updatable repos are already on ${latest}`)
+            return
+        }
+
+        clack.note(
+            outdated.map((it) => `${it.name}: ${chalk.red(it.usage.version)} → ${chalk.green(latest)}`).join('\n'),
+            `${outdated.length} repos to upgrade`,
+        )
+
+        for (const repo of outdated) {
+            await setCatalogVersion(repo, PDL_CLIENT, latest)
+        }
+
+        const results = await buildRepos(outdated, latest)
+
+        await reportAndPush(gitter, results, { file: CATALOG_FILE, commitMessage: PDL_CLIENT_COMMIT_MESSAGE })
     })
 }
 
