@@ -27,16 +27,13 @@ export async function promptForCoAuthors(): Promise<Author[] | null> {
     const combinedAuthorOptions = [...authorOptions, ...bonusCoAuthors]
 
     const selectable = combinedAuthorOptions.filter(([, , user]) => Bun.env.USER !== user)
-
     const selectedAuthors = await clack.multiselect({
         message: 'Select co-authors',
-        options: selectable.map(([name, email, user]) => ({
-            value: [name, email, user] satisfies Author,
-            label: name,
+        options: selectable.map((author) => ({
+            value: author,
+            label: author[0],
         })),
-        initialValues: selectable.filter(([name]) =>
-            previouslyUsedCoAuthors.some((prev) => name === prev[0]),
-        ) as Author[],
+        initialValues: selectable.filter(([name]) => previouslyUsedCoAuthors.some((prev) => name === prev[0])),
         required: true,
     })
 
